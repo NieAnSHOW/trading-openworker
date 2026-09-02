@@ -20,7 +20,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -684,6 +684,60 @@ def create_app(manager: SessionManager) -> FastAPI:
         from .. import alphazoo
 
         return alphazoo.compare_status(job_id)
+
+    # -- Reports (Vibe-Trading backtest run library; runs live under <workspace>/runs) --
+    def _reports_workspace(workspace: str) -> Path:
+        root = Path(workspace) if workspace else manager.default_workspace
+        if not root:
+            raise HTTPException(status_code=400, detail="no workspace open")
+        return root
+
+    @app.get("/v1/reports/runs")
+    async def reports_list(
+        workspace: str = "", limit: int = 20
+    ) -> list[dict[str, Any]]:
+        from .. import reports
+
+        return await asyncio.to_thread(
+            reports.list_runs, _reports_workspace(workspace), limit
+        )
+
+    @app.get("/v1/reports/runs/{run_id}/code")
+    async def reports_run_code(run_id: str, workspace: str = "") -> dict[str, str]:
+        from .. import reports
+
+        try:
+            return await asyncio.to_thread(
+                reports.get_run_code, _reports_workspace(workspace), run_id
+            )
+        except ValueError:
+            raise HTTPException(status_code=400, detail="invalid run id")
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+
+    @app.get("/v1/reports/runs/{run_id}")
+    async def reports_run_detail(
+        run_id: str,
+        workspace: str = "",
+        chart_symbol: str | None = None,
+        chart_payload: str | None = None,
+    ) -> dict[str, Any]:
+        from .. import reports
+
+        if chart_payload not in (None, "summary"):
+            raise HTTPException(status_code=400, detail="invalid chart_payload")
+        try:
+            return await asyncio.to_thread(
+                reports.get_run,
+                _reports_workspace(workspace),
+                run_id,
+                chart_symbol=chart_symbol or None,
+                chart_payload=chart_payload or "full",
+            )
+        except ValueError:
+            raise HTTPException(status_code=400, detail="invalid run id")
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
 
     @app.post("/v1/skills")
     def create_skill(body: dict) -> dict[str, Any]:
