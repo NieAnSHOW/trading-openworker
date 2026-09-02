@@ -1,9 +1,20 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { getI18n, useTranslation } from "react-i18next";
 import type { Attachment, SessionUsage } from "../types";
 import { isPdfFile, readFile } from "../attach";
 import { ProjectBindMenu } from "./ProjectBindMenu";
-import { getSettings, inspectPdf, sessionSkills, type SessionSkillRow } from "../api";
+import {
+  getSettings,
+  inspectPdf,
+  sessionSkills,
+  type SessionSkillRow,
+} from "../api";
 import { formatTokens, totalTokens } from "../usage";
 import { Dropdown, type Option } from "./Dropdown";
 import { Icon } from "./Icon";
@@ -36,8 +47,16 @@ type ModeOption = Option & { caution?: boolean; gated?: boolean };
 // Labels/descriptions are i18n keys (resolved at render via t()); kept as keys here so the
 // module-level constant stays outside the component without losing translation.
 const PERMISSION_OPTIONS: ModeOption[] = [
-  { value: "discuss", label: "composer.mode.discuss", description: "composer.mode.discuss_desc" },
-  { value: "interactive", label: "composer.mode.interactive", description: "composer.mode.interactive_desc" },
+  {
+    value: "discuss",
+    label: "composer.mode.discuss",
+    description: "composer.mode.discuss_desc",
+  },
+  {
+    value: "interactive",
+    label: "composer.mode.interactive",
+    description: "composer.mode.interactive_desc",
+  },
   {
     value: "auto-approve",
     label: "composer.mode.auto_approve",
@@ -64,7 +83,8 @@ export function modeLabel(value: string): string {
 // goes stale and silently offers ids the backend never confirmed (caught 2026-07-21).
 
 // Drop the provider prefix for display (anthropic:claude-opus-4-8 → claude-opus-4-8); full id on hover.
-const shortModel = (m: string) => (m.includes(":") ? m.split(":").slice(1).join(":") : m);
+const shortModel = (m: string) =>
+  m.includes(":") ? m.split(":").slice(1).join(":") : m;
 
 // Identify an attachment by name + payload size so duplicates (e.g. the same file picked twice,
 // or a prefill applied twice) collapse to one chip.
@@ -72,7 +92,10 @@ const attKey = (a: Attachment) =>
   a.kind === "text"
     ? `t:${a.name}:${a.text?.length ?? 0}`
     : `${a.kind[0]}:${a.name}:${a.data_url?.length ?? 0}`;
-const mergeAttachments = (cur: Attachment[], add: Attachment[]): Attachment[] => {
+const mergeAttachments = (
+  cur: Attachment[],
+  add: Attachment[],
+): Attachment[] => {
   const seen = new Set(cur.map(attKey));
   return [...cur, ...add.filter((a) => !seen.has(attKey(a)))].slice(0, 8);
 };
@@ -144,17 +167,25 @@ export function Composer(props: Props) {
   // inserts "/name " INLINE in the box (Claude-Code style — the slash text IS the state);
   // the user keeps typing after it, and on send the prefix is stripped while the skill name
   // rides the user_message as its own field. Editing the prefix away un-picks the skill.
-  const [pendingSkill, setPendingSkill] = useState<SessionSkillRow | null>(null);
-  const [slashSkills, setSlashSkills] = useState<SessionSkillRow[] | null>(null);
+  const [pendingSkill, setPendingSkill] = useState<SessionSkillRow | null>(
+    null,
+  );
+  const [slashSkills, setSlashSkills] = useState<SessionSkillRow[] | null>(
+    null,
+  );
   const [slashIndex, setSlashIndex] = useState(0);
   const prefixIntact =
     pendingSkill !== null &&
-    (text === `/${pendingSkill.name}` || text.startsWith(`/${pendingSkill.name} `));
+    (text === `/${pendingSkill.name}` ||
+      text.startsWith(`/${pendingSkill.name} `));
   useEffect(() => {
     if (pendingSkill && !prefixIntact) setPendingSkill(null);
   }, [pendingSkill, prefixIntact]);
   const slashQuery =
-    !prefixIntact && props.sessionId && text.startsWith("/") && !/\s/.test(text.slice(1))
+    !prefixIntact &&
+    props.sessionId &&
+    text.startsWith("/") &&
+    !/\s/.test(text.slice(1))
       ? text.slice(1).toLowerCase()
       : null;
   const slashMatches = (slashSkills ?? []).filter((s) =>
@@ -185,7 +216,11 @@ export function Composer(props: Props) {
   const [bindMenu, setBindMenu] = useState<"memory" | "board" | null>(null);
   // Bindings need a session and a workspace surface (Chat has neither).
   const sessionRows = Boolean(props.sessionId && props.workspace !== undefined);
-  const bindRow = (icon: "book" | "table", label: string, kind: "memory" | "board") => (
+  const bindRow = (
+    icon: "book" | "table",
+    label: string,
+    kind: "memory" | "board",
+  ) => (
     <button
       className={
         "w-full flex items-center gap-2.5 px-3 py-1.5 text-[13px] text-left hover:bg-paper" +
@@ -251,7 +286,8 @@ export function Composer(props: Props) {
     if (!p || p.nonce === appliedNonce.current) return;
     appliedNonce.current = p.nonce;
     setText(p.text);
-    if (p.attachments?.length) setAttachments((cur) => mergeAttachments(cur, p.attachments!));
+    if (p.attachments?.length)
+      setAttachments((cur) => mergeAttachments(cur, p.attachments!));
     textareaRef.current?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.prefill?.nonce]);
@@ -261,16 +297,20 @@ export function Composer(props: Props) {
   useEffect(() => {
     if (!isTauri()) return;
     const refresh = (event?: Event) => {
-      const supplied = (event as CustomEvent<DictationStatus> | undefined)?.detail;
+      const supplied = (event as CustomEvent<DictationStatus> | undefined)
+        ?.detail;
       if (supplied) {
         setDictation(supplied);
         return;
       }
-      void getDictationStatus().then((status) => status && setDictation(status));
+      void getDictationStatus().then(
+        (status) => status && setDictation(status),
+      );
     };
     refresh();
     window.addEventListener("coworker:voice-input-changed", refresh);
-    return () => window.removeEventListener("coworker:voice-input-changed", refresh);
+    return () =>
+      window.removeEventListener("coworker:voice-input-changed", refresh);
   }, []);
 
   useEffect(() => {
@@ -296,7 +336,8 @@ export function Composer(props: Props) {
     }
     const timer = window.setInterval(() => {
       getDictationLevel().then((level) => {
-        if (typeof level === "number") setLevels((cur) => [...cur.slice(-13), level]);
+        if (typeof level === "number")
+          setLevels((cur) => [...cur.slice(-13), level]);
       });
     }, 100);
     return () => window.clearInterval(timer);
@@ -310,14 +351,19 @@ export function Composer(props: Props) {
       void cancelDictation()
         .catch(() => undefined)
         .finally(() => {
-          void getDictationStatus().then((status) => status && setDictation(status));
+          void getDictationStatus().then(
+            (status) => status && setDictation(status),
+          );
         });
     };
     window.addEventListener("keydown", cancelOnEscape);
     return () => window.removeEventListener("keydown", cancelOnEscape);
   }, [dictation?.recording]);
 
-  const voiceReady = !!dictation?.supported && !!dictation?.model_verified && !!dictation?.test_passed;
+  const voiceReady =
+    !!dictation?.supported &&
+    !!dictation?.model_verified &&
+    !!dictation?.test_passed;
   const recordingTime = `${Math.floor(recordingSeconds / 60)}:${String(recordingSeconds % 60).padStart(2, "0")}`;
 
   // Attach-time PDF thresholds (Settings → Token savings): a PDF over the user's page or
@@ -340,25 +386,40 @@ export function Composer(props: Props) {
     for (const file of list) {
       if (isPdfFile(file) && file.size > maxMb * 1024 * 1024) {
         showAttachNotice(
-          t("composer.pdf_too_big", { name: file.name, mb: (file.size / 1024 / 1024).toFixed(1), limit: maxMb }),
+          t("composer.pdf_too_big", {
+            name: file.name,
+            mb: (file.size / 1024 / 1024).toFixed(1),
+            limit: maxMb,
+          }),
         );
         continue;
       }
       accepted.push(file);
     }
-    const read = (await Promise.all(accepted.map(readFile))).filter(Boolean) as Attachment[];
+    const read = (await Promise.all(accepted.map(readFile))).filter(
+      Boolean,
+    ) as Attachment[];
     const next: Attachment[] = [];
     for (const a of read) {
       if (a.kind === "pdf" && a.data_url) {
         const info = await inspectPdf(a.data_url).catch(() => null);
         if (info?.ok && (info.pages ?? 0) > maxPages) {
           showAttachNotice(
-            t("composer.pdf_too_many_pages", { name: a.name, pages: info.pages, limit: maxPages }),
+            t("composer.pdf_too_many_pages", {
+              name: a.name,
+              pages: info.pages,
+              limit: maxPages,
+            }),
           );
           continue;
         }
         if (info && !info.ok) {
-          showAttachNotice(t("composer.pdf_unreadable", { name: a.name, error: info.error || t("composer.pdf_could_not_read") }));
+          showAttachNotice(
+            t("composer.pdf_unreadable", {
+              name: a.name,
+              error: info.error || t("composer.pdf_could_not_read"),
+            }),
+          );
           continue;
         }
       }
@@ -407,7 +468,9 @@ export function Composer(props: Props) {
     if (slashQuery !== null) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setSlashIndex((i) => Math.min(i + 1, Math.max(slashMatches.length - 1, 0)));
+        setSlashIndex((i) =>
+          Math.min(i + 1, Math.max(slashMatches.length - 1, 0)),
+        );
         return;
       }
       if (e.key === "ArrowUp") {
@@ -453,7 +516,11 @@ export function Composer(props: Props) {
         const transcript = await stopDictation();
         if (transcript === null) throw new Error(t("composer.err_transcribe"));
         if (transcript.trim()) {
-          setText((draft) => (draft.trim() ? `${draft.trimEnd()} ${transcript.trim()}` : transcript.trim()));
+          setText((draft) =>
+            draft.trim()
+              ? `${draft.trimEnd()} ${transcript.trim()}`
+              : transcript.trim(),
+          );
         }
         setDictation(await getDictationStatus());
         textareaRef.current?.focus();
@@ -471,7 +538,11 @@ export function Composer(props: Props) {
       if (!recording?.recording) throw new Error(t("composer.err_mic_start"));
       setDictation(recording);
     } catch (error) {
-      setDictationError(error instanceof Error ? error.message : t("composer.err_dictation_unavailable"));
+      setDictationError(
+        error instanceof Error
+          ? error.message
+          : t("composer.err_dictation_unavailable"),
+      );
       const status = await getDictationStatus();
       if (status) setDictation(status);
     } finally {
@@ -494,14 +565,18 @@ export function Composer(props: Props) {
   // composer isn't carrying a constant blue dot.
   // A pinned /skill is sendable content on its own (tester catch 2026-07-26: the arrow
   // stayed grey after picking a skill, reading as "stuck").
-  const hasContent = text.trim().length > 0 || attachments.length > 0 || !!pendingSkill;
+  const hasContent =
+    text.trim().length > 0 || attachments.length > 0 || !!pendingSkill;
 
   return (
     <div className="composer-wrap px-6 pb-5 pt-4">
       {props.approvalSlot}
 
       {dictationError && (
-        <div className="max-w-3xl mx-auto mb-2 px-1 text-[12px] text-red-600" role="alert">
+        <div
+          className="max-w-3xl mx-auto mb-2 px-1 text-[12px] text-red-600"
+          role="alert"
+        >
           {dictationError}
         </div>
       )}
@@ -527,7 +602,13 @@ export function Composer(props: Props) {
       {attachments.length > 0 && (
         <div className="max-w-3xl mx-auto mb-1.5 flex flex-wrap gap-2">
           {attachments.map((a, i) => (
-            <AttachChip key={i} a={a} onRemove={() => setAttachments((all) => all.filter((_, j) => j !== i))} />
+            <AttachChip
+              key={i}
+              a={a}
+              onRemove={() =>
+                setAttachments((all) => all.filter((_, j) => j !== i))
+              }
+            />
           ))}
         </div>
       )}
@@ -551,11 +632,20 @@ export function Composer(props: Props) {
         {/* "/" force-run popup — in-flow above the textarea; rows are the session's
             effective menu only (muted/disabled skills never appear). */}
         {slashQuery !== null && (
-          <div className="px-2 pt-2" data-testid="skill-popup" role="listbox" aria-label="Skills">
+          <div
+            className="px-2 pt-2 h-[200px] overflow-auto "
+            data-testid="skill-popup"
+            role="listbox"
+            aria-label="Skills"
+          >
             {slashSkills === null ? (
-              <div className="px-2 py-1.5 text-[12px] text-faint">Loading skills…</div>
+              <div className="px-2 py-1.5 text-[12px] text-faint">
+                Loading skills…
+              </div>
             ) : slashMatches.length === 0 ? (
-              <div className="px-2 py-1.5 text-[12px] text-faint">No matching skills.</div>
+              <div className="px-2 py-1.5 text-[12px] text-faint">
+                No matching skills.
+              </div>
             ) : (
               slashMatches.map((s, i) => (
                 <button
@@ -569,8 +659,12 @@ export function Composer(props: Props) {
                   onMouseEnter={() => setSlashIndex(i)}
                   onClick={() => pickSkill(s)}
                 >
-                  <span className="text-[13px] font-medium text-accent shrink-0">/{s.name}</span>
-                  <span className="text-[12px] text-faint truncate flex-1">{s.description}</span>
+                  <span className="text-[13px] font-medium text-accent shrink-0">
+                    /{s.name}
+                  </span>
+                  <span className="text-[12px] text-faint truncate flex-1">
+                    {s.description}
+                  </span>
                   <span className="text-[11px] px-1.5 py-0.5 rounded-full border border-line text-faint shrink-0">
                     {s.scope}
                   </span>
@@ -621,12 +715,16 @@ export function Composer(props: Props) {
                       {t("composer.attach_this_message")}
                     </div>
                   )}
-                  {attachItem("image", t("composer.attach_image"), () => pickFiles("image/*"))}
-                  {attachItem("file", "PDF", () => pickFiles("application/pdf,.pdf"))}
-                  {attachItem(
-                    "fileCode",
-                    t("composer.attach_other"),
-                    () => pickFiles("text/*,.md,.csv,.json,.yaml,.yml,.log,.py,.ts,.tsx,.js,.rs,.go,.toml"),
+                  {attachItem("image", t("composer.attach_image"), () =>
+                    pickFiles("image/*"),
+                  )}
+                  {attachItem("file", "PDF", () =>
+                    pickFiles("application/pdf,.pdf"),
+                  )}
+                  {attachItem("fileCode", t("composer.attach_other"), () =>
+                    pickFiles(
+                      "text/*,.md,.csv,.json,.yaml,.yml,.log,.py,.ts,.tsx,.js,.rs,.go,.toml",
+                    ),
                   )}
                   {sessionRows && (
                     <>
@@ -667,15 +765,25 @@ export function Composer(props: Props) {
           {/* Listening replaces the quiet middle controls with a LIVE waveform (mic RMS,
               polled ~10Hz, scrolling left) + elapsed time (§37). */}
           {dictation?.recording ? (
-            <div className="voice-wave-row flex-1 flex items-center gap-2 ml-1" aria-hidden="true">
+            <div
+              className="voice-wave-row flex-1 flex items-center gap-2 ml-1"
+              aria-hidden="true"
+            >
               <span className="voice-wave-line" />
               <span className="voice-wave-bars">
                 {Array.from({ length: 14 }, (_, index) => {
                   const level = levels[levels.length - 14 + index] ?? 0;
-                  return <i key={index} style={{ height: Math.round(4 + level * 24) }} />;
+                  return (
+                    <i
+                      key={index}
+                      style={{ height: Math.round(4 + level * 24) }}
+                    />
+                  );
                 })}
               </span>
-              <span className="text-[12px] text-muted tabular-nums">{recordingTime}</span>
+              <span className="text-[12px] text-muted tabular-nums">
+                {recordingTime}
+              </span>
             </div>
           ) : props.workspace !== undefined ? (
             <ModeMenu
@@ -687,55 +795,71 @@ export function Composer(props: Props) {
             />
           ) : null}
 
-          {dictationBusy === t("composer.starting_transcribe") && <span className="text-[12px] text-accent">{dictationBusy}</span>}
+          {dictationBusy === t("composer.starting_transcribe") && (
+            <span className="text-[12px] text-accent">{dictationBusy}</span>
+          )}
 
           <span className="ml-auto" />
 
           {/* token usage (OPE-42) — a quiet chip; hidden until the server reports usage.
               Shows the context-window fill bar alone (the session total lives in the
               popover), or the session total when there's no window / the bar is off. */}
-          {!dictation?.recording && props.usage && totalTokens(props.usage) > 0 && (
-            <UsageChip
-              usage={props.usage}
-              contextWindow={props.contextWindow}
-              contextBar={props.contextBar}
-              model={props.model}
-              modelLabels={props.modelLabels}
-            />
-          )}
+          {!dictation?.recording &&
+            props.usage &&
+            totalTokens(props.usage) > 0 && (
+              <UsageChip
+                usage={props.usage}
+                contextWindow={props.contextWindow}
+                contextBar={props.contextBar}
+                model={props.model}
+                modelLabels={props.modelLabels}
+              />
+            )}
 
           {/* model — a quiet chip, now for the session's whole life (§17 rev 2026-07-22:
               mid-session switching shipped, so the picker stays actionable; the topbar
               subtitle still states the current model). */}
-          {!dictation?.recording && (needsModel ? (
-            <button
-              className="pill model-warn chip"
-              onClick={() => props.onConnectModel?.()}
-              title={t("composer.model.connect")}
-              aria-label={t("composer.model.none_aria")}
-            >
-              <span className="pill-label">{t("composer.model.none")}</span>
-              <span className="model-warn-ico" aria-hidden>⚠</span>
-            </button>
-          ) : modelsLoaded ? (
-            <Dropdown value={props.model} options={modelOptions} onChange={props.onModelChange} align="right" />
-          ) : (
-            <button
-              className="pill chip text-faint cursor-default"
-              disabled
-              data-testid="models-loading"
-              title={t("composer.model.loading_title")}
-            >
-              <span className="pill-label">{t("composer.model.loading")}</span>
-            </button>
-          ))}
+          {!dictation?.recording &&
+            (needsModel ? (
+              <button
+                className="pill model-warn chip"
+                onClick={() => props.onConnectModel?.()}
+                title={t("composer.model.connect")}
+                aria-label={t("composer.model.none_aria")}
+              >
+                <span className="pill-label">{t("composer.model.none")}</span>
+                <span className="model-warn-ico" aria-hidden>
+                  ⚠
+                </span>
+              </button>
+            ) : modelsLoaded ? (
+              <Dropdown
+                value={props.model}
+                options={modelOptions}
+                onChange={props.onModelChange}
+                align="right"
+              />
+            ) : (
+              <button
+                className="pill chip text-faint cursor-default"
+                disabled
+                data-testid="models-loading"
+                title={t("composer.model.loading_title")}
+              >
+                <span className="pill-label">
+                  {t("composer.model.loading")}
+                </span>
+              </button>
+            ))}
 
           {/* mic — immediately before send (owner call, DMG #28 walkthrough) */}
           {isTauri() && (
             <button
               className={
                 iconBtn +
-                (dictation?.recording ? " bg-red-50 text-red-600 hover:bg-red-100" : "") +
+                (dictation?.recording
+                  ? " bg-red-50 text-red-600 hover:bg-red-100"
+                  : "") +
                 (dictationBusy ? " opacity-60" : "") +
                 (!voiceReady && !dictation?.recording ? " opacity-40" : "")
               }
@@ -749,7 +873,13 @@ export function Composer(props: Props) {
                     ? t("composer.voice.start_dictation")
                     : t("composer.voice.configure"))
               }
-              aria-label={dictation?.recording ? t("composer.voice.stop_dictation") : voiceReady ? t("composer.voice.start_dictation_btn") : t("composer.voice.configure")}
+              aria-label={
+                dictation?.recording
+                  ? t("composer.voice.stop_dictation")
+                  : voiceReady
+                    ? t("composer.voice.start_dictation_btn")
+                    : t("composer.voice.configure")
+              }
               aria-disabled={!voiceReady && !dictation?.recording}
             >
               <Icon name={dictation?.recording ? "stop" : "mic"} size={16} />
@@ -765,16 +895,31 @@ export function Composer(props: Props) {
             <button
               className={
                 "w-7 h-7 rounded-full grid place-items-center shrink-0 transition-colors " +
-                (hasContent && props.connected && !dictation?.recording && !dictationBusy
+                (hasContent &&
+                props.connected &&
+                !dictation?.recording &&
+                !dictationBusy
                   ? "bg-accent text-white hover:brightness-105"
                   : "bg-paper border border-line text-faint")
               }
               onClick={submit}
-              disabled={!props.connected || !!dictation?.recording || !!dictationBusy}
+              disabled={
+                !props.connected || !!dictation?.recording || !!dictationBusy
+              }
               title={needsModel ? t("composer.connect_to_send") : undefined}
               aria-label={t("common.send")}
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
                 <path d="M12 19V5M5 12l7-7 7 7" />
               </svg>
             </button>
@@ -782,7 +927,9 @@ export function Composer(props: Props) {
         </div>
       </div>
       <span className="sr-only" role="status" aria-live="polite">
-        {dictation?.recording ? t("composer.listening_sr", { time: recordingTime }) : dictationBusy || ""}
+        {dictation?.recording
+          ? t("composer.listening_sr", { time: recordingTime })
+          : dictationBusy || ""}
       </span>
     </div>
   );
@@ -846,7 +993,10 @@ function UsageChip({
             fallback is the in-context size — the one figure we trust — never the
             cumulative session total. */}
         {showBar ? (
-          <span className="w-12 h-1.5 rounded-full bg-line overflow-hidden" aria-hidden="true">
+          <span
+            className="w-12 h-1.5 rounded-full bg-line overflow-hidden"
+            aria-hidden="true"
+          >
             <span
               className="block h-full bg-accent transition-all"
               style={{ width: `${Math.max(pct as number, 4)}%` }}
@@ -854,7 +1004,9 @@ function UsageChip({
           </span>
         ) : (
           <span className="tabular-nums">
-            {SHOW_SESSION_TOTALS ? formatTokens(total) : formatTokens(usage.context)}
+            {SHOW_SESSION_TOTALS
+              ? formatTokens(total)
+              : formatTokens(usage.context)}
           </span>
         )}
       </button>
@@ -878,7 +1030,8 @@ function UsageChip({
                   />
                 </div>
                 <div className="mt-1 text-[12px] text-muted tabular-nums">
-                  {formatTokens(usage.context)} of {formatTokens(contextWindow)} · {pct}%
+                  {formatTokens(usage.context)} of {formatTokens(contextWindow)}{" "}
+                  · {pct}%
                 </div>
               </div>
             ) : usage.context > 0 ? (
@@ -886,41 +1039,51 @@ function UsageChip({
                 In context now: {formatTokens(usage.context)} tokens
               </div>
             ) : null}
-            {SHOW_SESSION_TOTALS && (<>
-            <div className="text-[11px] uppercase tracking-[0.06em] text-faint font-semibold mb-1">
-              Session totals
-            </div>
-            <div className="flex flex-col gap-1.5">
-              {Object.entries(usage.byModel).map(([id, t]) => (
-                <div key={id}>
-                  <div className="text-[12px] text-ink font-medium truncate" title={id}>
-                    {labelFor(id)}
-                  </div>
-                  {/* Every row is a session sum. With a cache split, the input rows are
+            {SHOW_SESSION_TOTALS && (
+              <>
+                <div className="text-[11px] uppercase tracking-[0.06em] text-faint font-semibold mb-1">
+                  Session totals
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {Object.entries(usage.byModel).map(([id, t]) => (
+                    <div key={id}>
+                      <div
+                        className="text-[12px] text-ink font-medium truncate"
+                        title={id}
+                      >
+                        {labelFor(id)}
+                      </div>
+                      {/* Every row is a session sum. With a cache split, the input rows are
                       the three BILLING CLASSES of input (each priced differently) and
                       read as components: uncached + cache reads + cache writes = total.
                       Without one (Ollama, compat vendors), plain "Input" says it all. */}
-                  <div className="mt-0.5 flex flex-col gap-0.5">
-                    {t.cache_read + t.cache_write > 0 ? (
-                      <>
-                        {stat("Uncached input", t.input)}
-                        {stat("Cache reads", t.cache_read)}
-                        {stat("Cache writes", t.cache_write)}
-                        {stat("Total input", t.input + t.cache_read + t.cache_write)}
-                      </>
-                    ) : (
-                      stat("Input", t.input)
-                    )}
-                    {stat("Output", t.output)}
-                  </div>
+                      <div className="mt-0.5 flex flex-col gap-0.5">
+                        {t.cache_read + t.cache_write > 0 ? (
+                          <>
+                            {stat("Uncached input", t.input)}
+                            {stat("Cache reads", t.cache_read)}
+                            {stat("Cache writes", t.cache_write)}
+                            {stat(
+                              "Total input",
+                              t.input + t.cache_read + t.cache_write,
+                            )}
+                          </>
+                        ) : (
+                          stat("Input", t.input)
+                        )}
+                        {stat("Output", t.output)}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <div className="mt-2 pt-2 border-t border-line flex items-baseline justify-between text-[12px]">
-              <span className="text-faint">Total</span>
-              <span className="text-ink tabular-nums">{formatTokens(total)} tokens</span>
-            </div>
-            </>)}
+                <div className="mt-2 pt-2 border-t border-line flex items-baseline justify-between text-[12px]">
+                  <span className="text-faint">Total</span>
+                  <span className="text-ink tabular-nums">
+                    {formatTokens(total)} tokens
+                  </span>
+                </div>
+              </>
+            )}
             {model && !modelLabels?.[model] && contextWindow === undefined && (
               <div className="mt-1 text-[11px] text-faint leading-snug">
                 Context meter unavailable for custom models.
@@ -978,13 +1141,17 @@ function ModeMenu({
         aria-label={t("composer.mode_label")}
         title={
           `${t("composer.mode_label")}: ${current ? t(current.label) : mode}` +
-          (reviewerPaused && mode === "auto-approve" ? " · " + t("composer.reviewer_paused_tip") : "") +
+          (reviewerPaused && mode === "auto-approve"
+            ? " · " + t("composer.reviewer_paused_tip")
+            : "") +
           (unattended ? " · " + t("composer.approvals_to_inbox") : "")
         }
       >
         {current ? t(current.label) : mode}
         {reviewerPaused && mode === "auto-approve" && (
-          <span className="text-[11px] text-warnInk" data-testid="mode-paused">· {t("composer.paused")}</span>
+          <span className="text-[11px] text-warnInk" data-testid="mode-paused">
+            · {t("composer.paused")}
+          </span>
         )}
         <Icon name="chevronDown" size={11} className="text-faint" />
       </button>
@@ -1012,12 +1179,18 @@ function ModeMenu({
                   }
                 >
                   {o.caution && (
-                    <Icon name="warning" size={13} className="mr-1.5 shrink-0 text-warnInk" />
+                    <Icon
+                      name="warning"
+                      size={13}
+                      className="mr-1.5 shrink-0 text-warnInk"
+                    />
                   )}
                   {t(o.label)}
                   {o.value === mode && <span className="ml-1.5">✓</span>}
                 </span>
-                <span className="text-[11px] text-faint leading-snug">{t(o.description ?? "")}</span>
+                <span className="text-[11px] text-faint leading-snug">
+                  {t(o.description ?? "")}
+                </span>
               </button>
             ))}
             {onUnattendedChange && (
@@ -1025,7 +1198,9 @@ function ModeMenu({
                 <div className="my-1 border-t border-line" />
                 <div className="flex items-center gap-2 px-2.5 py-1.5">
                   <span className="flex-1 min-w-0">
-                    <span className="block text-[13px] text-ink">{t("composer.approvals_to_inbox")}</span>
+                    <span className="block text-[13px] text-ink">
+                      {t("composer.approvals_to_inbox")}
+                    </span>
                     <span className="block text-[11px] text-faint leading-snug">
                       {t("composer.approvals_to_inbox_help")}
                     </span>
@@ -1046,7 +1221,11 @@ function ModeMenu({
 }
 
 // A row in the "+" attach menu.
-function attachItem(icon: "image" | "file" | "fileCode", label: string, onClick: () => void) {
+function attachItem(
+  icon: "image" | "file" | "fileCode",
+  label: string,
+  onClick: () => void,
+) {
   return (
     <button
       className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[13px] text-left hover:bg-paper"
@@ -1069,7 +1248,11 @@ function AttachChip({ a, onRemove }: { a: Attachment; onRemove: () => void }) {
           <span className="attach-name">{a.name}</span>
         </>
       )}
-      <button className="attach-x" onClick={onRemove} title={t("common.remove")}>
+      <button
+        className="attach-x"
+        onClick={onRemove}
+        title={t("common.remove")}
+      >
         ✕
       </button>
     </div>

@@ -2506,3 +2506,142 @@ export async function nameCurrentProject(
   });
   return r.json();
 }
+
+/* ---------- Alpha Zoo (vendored Vibe-Trading factor engine) ---------- */
+
+export interface AlphaSummary {
+  id: string;
+  zoo: string;
+  theme: string[];
+  universe: string[];
+  nickname?: string | null;
+  decay_horizon?: number | string | null;
+  min_warmup_bars?: number | null;
+  requires_sector?: boolean;
+}
+
+export interface AlphaDetail {
+  alpha: { id: string; zoo: string; module_path: string; meta: Record<string, unknown> };
+  source_code: string;
+}
+
+export type AlphaCategory = "alive" | "reversed" | "dead";
+
+export interface AlphaBenchTopRow {
+  id: string;
+  ic_mean: number;
+  ir: number;
+  theme: string[];
+  category: AlphaCategory;
+}
+
+export interface AlphaBenchResult {
+  alive: number;
+  reversed: number;
+  dead: number;
+  skipped?: number;
+  n_skipped?: number;
+  top5_by_ir: AlphaBenchTopRow[];
+  dead_examples: AlphaBenchTopRow[];
+  by_theme?: Record<string, { alive: number; reversed: number; dead: number }>;
+  n_alphas_tested?: number;
+  meta?: Record<string, unknown>;
+}
+
+export interface AlphaBenchProgress {
+  n_done: number;
+  n_total: number;
+  current_alpha_id?: string | null;
+}
+
+export interface AlphaJobView {
+  job_id: string;
+  status: "queued" | "running" | "done" | "error";
+  progress: AlphaBenchProgress;
+  result?: unknown;
+  error?: string | null;
+}
+
+export interface AlphaCompareRankRow {
+  rank: number;
+  id: string;
+  zoo: string;
+  ic_mean: number;
+  ic_std: number;
+  ir: number;
+  ic_positive_ratio: number;
+  ic_count: number;
+  [key: string]: unknown;
+}
+
+export interface AlphaCompareResult {
+  winner: string;
+  n_compared: number;
+  sort: string;
+  universe: string;
+  period: string;
+  n_skipped: number;
+  skipped: { id: string; reason: string }[];
+  ranking: AlphaCompareRankRow[];
+}
+
+const alphaUrl = (path = "") => `${httpBase()}/v1/alphazoo${path}`;
+
+export async function listAlphas(params: {
+  zoo?: string;
+  theme?: string;
+  universe?: string;
+  limit?: number;
+}): Promise<{ alphas: AlphaSummary[]; total: number }> {
+  const q = new URLSearchParams();
+  if (params.zoo) q.set("zoo", params.zoo);
+  if (params.theme) q.set("theme", params.theme);
+  if (params.universe) q.set("universe", params.universe);
+  q.set("limit", String(params.limit ?? 1000));
+  const res = await fetch(alphaUrl(`/alphas?${q.toString()}`));
+  return res.json();
+}
+
+export async function getAlpha(alphaId: string): Promise<AlphaDetail> {
+  const res = await fetch(alphaUrl(`/alphas/${encodeURIComponent(alphaId)}`));
+  if (!res.ok) throw new Error(`Failed to load alpha ${alphaId}`);
+  return res.json();
+}
+
+export async function createAlphaBench(body: {
+  zoo: string;
+  universe: string;
+  period: string;
+  top: number;
+}): Promise<{ job_id: string }> {
+  const res = await fetch(alphaUrl("/bench"), jsonPost(body));
+  const data = await res.json();
+  if (!data.job_id) throw new Error(data.error || "Failed to start bench");
+  return data;
+}
+
+export async function getAlphaBenchStatus(jobId: string): Promise<AlphaJobView> {
+  const res = await fetch(alphaUrl(`/bench/${encodeURIComponent(jobId)}`));
+  const data = await res.json();
+  if (!data.ok !== false && data.job) return data.job;
+  throw new Error(data.error || "Bench job not found");
+}
+
+export async function createAlphaCompare(body: {
+  alpha_ids: string[];
+  universe: string;
+  period: string;
+  sort: string;
+}): Promise<{ job_id: string }> {
+  const res = await fetch(alphaUrl("/compare"), jsonPost(body));
+  const data = await res.json();
+  if (!data.job_id) throw new Error(data.error || "Failed to start comparison");
+  return data;
+}
+
+export async function getAlphaCompareStatus(jobId: string): Promise<AlphaJobView> {
+  const res = await fetch(alphaUrl(`/compare/${encodeURIComponent(jobId)}`));
+  const data = await res.json();
+  if (data.job) return data.job;
+  throw new Error(data.error || "Compare job not found");
+}
