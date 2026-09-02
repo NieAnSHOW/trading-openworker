@@ -66,6 +66,14 @@ coworker = [
     "personas/builtin/*.md",
     "personas/builtin/*/manifest.md",
     "personas/builtin/*/skills/*/SKILL.md",
+    # Shipped trading skills: SKILL.md plus nested resource files (md/py), up to 7 levels.
+    "skills/builtin/*/SKILL.md",
+    "skills/builtin/*/*",
+    "skills/builtin/*/*/*",
+    "skills/builtin/*/*/*/*",
+    "skills/builtin/*/*/*/*/*",
+    "skills/builtin/*/*/*/*/*/*",
+    "skills/builtin/*/*/*/*/*/*/*",
 ]
 
 [tool.pytest.ini_options]

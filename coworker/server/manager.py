@@ -86,7 +86,13 @@ from ..secrets import SecretStore, state_dir
 from ..sessions import SessionRecord
 from ..teams import Actor as TeamActor
 from ..teams import BoardError as TeamsBoardError
-from ..teams import JournalStore, Role as TeamRole, TeamStore, board_tools, journal_tools
+from ..teams import (
+    JournalStore,
+    Role as TeamRole,
+    TeamStore,
+    board_tools,
+    journal_tools,
+)
 from ..projects import (
     project_key,
     project_label,
@@ -99,6 +105,7 @@ from ..teams.registry import TeamRegistry, TeamWorker
 from ..teams.attachments import AttachmentStore
 from ..teams.tokens import BoardTokens
 from ..skills import (
+    BUILTIN_SKILLS_DIR,
     SessionSkillStore,
     SkillLoader,
     SkillStore,
@@ -384,9 +391,7 @@ class SessionManager:
             }
         canonical = WorkspaceTrustStore.canonical(path)
         commands = (
-            workspace_allowed_commands(canonical)
-            if Path(canonical).is_dir()
-            else []
+            workspace_allowed_commands(canonical) if Path(canonical).is_dir() else []
         )
         trusted = self.workspace_trust.is_trusted(canonical)
         return {
@@ -404,26 +409,23 @@ class SessionManager:
         """
         return bool(workspace and self.workspace_trust.is_trusted(workspace))
 
-    def set_workspace_trust(
-        self, path: str | Path, *, trusted: bool
-    ) -> dict[str, Any]:
+    def set_workspace_trust(self, path: str | Path, *, trusted: bool) -> dict[str, Any]:
         if not str(path).strip():
             return {"ok": False, "error": "workspace path is required"}
         candidate = Path(path).expanduser()
         if trusted and not candidate.is_dir():
             return {"ok": False, "error": "workspace is not a directory"}
         canonical = self.workspace_trust.set_trusted(candidate, trusted)
-        effective = load_config(
-            canonical, workspace_trusted=trusted
-        ).allowed_commands
+        effective = load_config(canonical, workspace_trusted=trusted).allowed_commands
         # Apply trust/revocation immediately to live sessions rooted at this exact path.
         for engine in self._engines.values():
             engine_workspace = str(
                 (getattr(engine, "audit_context", {}) or {}).get("workspace", "")
             )
-            if engine_workspace and WorkspaceTrustStore.canonical(
+            if (
                 engine_workspace
-            ) == canonical:
+                and WorkspaceTrustStore.canonical(engine_workspace) == canonical
+            ):
                 engine.permissions.allowed_commands = list(effective)
         return {
             "ok": True,
@@ -484,12 +486,17 @@ class SessionManager:
             return False
         try:
             return (
-                Path(path).expanduser().resolve().is_relative_to(self.scratch_base().resolve())
+                Path(path)
+                .expanduser()
+                .resolve()
+                .is_relative_to(self.scratch_base().resolve())
             )
         except OSError:
             return False
 
-    def provision_temp_workspace(self, session_id: str, *, git: bool = True) -> dict[str, Any]:
+    def provision_temp_workspace(
+        self, session_id: str, *, git: bool = True
+    ) -> dict[str, Any]:
         """UX-029 "Start in a temporary folder": create the conversation's temporary
         directory at SEND time (not connect) and, for code-family work, make git ready.
         Idempotent — re-sending against an existing dir is a no-op."""
@@ -528,7 +535,10 @@ class SessionManager:
         d = Path(dest).expanduser()
         if d.exists():
             if not d.is_dir() or any(d.iterdir()):
-                return {"ok": False, "error": "destination must be a new or empty folder"}
+                return {
+                    "ok": False,
+                    "error": "destination must be a new or empty folder",
+                }
             d.rmdir()  # shutil.move into an existing dir would nest src inside it
         try:
             d.parent.mkdir(parents=True, exist_ok=True)
@@ -633,7 +643,10 @@ class SessionManager:
             ]
             if self.is_temp_workspace(ws):
                 roots = [{"path": ws, "writable": True, "label": "scratch"}, *extra]
-            elif self._SESSION_ID_RE.match(session_id or "") and session_id not in {".", ".."}:
+            elif self._SESSION_ID_RE.match(session_id or "") and session_id not in {
+                ".",
+                "..",
+            }:
                 roots = [
                     {"path": ws, "writable": True, "label": "workspace"},
                     {
@@ -703,7 +716,9 @@ class SessionManager:
             # Persona-carried skills (OPE-58): the bundle's skills/ dir joins the loader
             # so its skills are readable, not just listed.
             extra_skill_dirs=(
-                [d] if (d := self.persona_skill_scope(agent_name)[0]) is not None else None
+                [d]
+                if (d := self.persona_skill_scope(agent_name)[0]) is not None
+                else None
             ),
             # Auto-Approve (spec §1.5): prefs-backed, so the Settings toggle takes effect on
             # the next session build without a config.toml edit.
@@ -1098,7 +1113,9 @@ class SessionManager:
                 return {"granted": False, "error": "no directory was provided"}
             writable = bool(resp.get("writable", args.get("writable", False)))
             if bool(args.get("primary", False)):
-                promo = await asyncio.to_thread(self.promote_workspace, session_id, path)
+                promo = await asyncio.to_thread(
+                    self.promote_workspace, session_id, path
+                )
                 if promo.get("ok"):
                     return {
                         "granted": True,
@@ -1456,7 +1473,9 @@ class SessionManager:
                 return {"ok": False, "error": self._mcp_errors[name]}
             finally:
                 self._mcp_authorizing.discard(name)
-        self._mcp_authorizing.discard(name)  # begin_mcp_connect flagged a name we never matched
+        self._mcp_authorizing.discard(
+            name
+        )  # begin_mcp_connect flagged a name we never matched
         return {"ok": False, "error": f"unknown MCP server: {name}"}
 
     async def mcp_connect_connector(self, name: str) -> dict[str, Any]:
@@ -1693,9 +1712,7 @@ class SessionManager:
         space = self._board_space(session_id)
         if space is None:
             raise TeamsBoardError("attachment not found")
-        self.team_store.require_attachment_access(
-            space, self._user_actor(), stored
-        )
+        self.team_store.require_attachment_access(space, self._user_actor(), stored)
         path = self.attachment_store.path_for(stored)
         return path.read_bytes(), self.attachment_store.mime_for(stored)
 
@@ -1774,11 +1791,12 @@ class SessionManager:
         for item in items:
             if item["state"] != "blocked":
                 continue
-            for event in reversed(
-                self.team_store.events(space, item_id=item["id"])
-            ):
+            for event in reversed(self.team_store.events(space, item_id=item["id"])):
                 payload = event.get("payload") or {}
-                if event["kind"] == "item_transitioned" and payload.get("to") == "blocked":
+                if (
+                    event["kind"] == "item_transitioned"
+                    and payload.get("to") == "blocked"
+                ):
                     if payload.get("comment"):
                         item["blocker"] = self._clamp(payload["comment"], 120)
                     break
@@ -1814,9 +1832,10 @@ class SessionManager:
             session_id=session_id,
         )
         for entry in items:
-            if not str((entry or {}).get("title", "")).strip() or not str(
-                (entry or {}).get("criteria", "")
-            ).strip():
+            if (
+                not str((entry or {}).get("title", "")).strip()
+                or not str((entry or {}).get("criteria", "")).strip()
+            ):
                 return {
                     "approved": False,
                     "error": "every item needs a title and acceptance criteria",
@@ -1909,9 +1928,7 @@ class SessionManager:
             space=space,
             actor=actor,
             attachments=self.attachment_store,
-        ) + journal_tools(
-            self.journal_store, actor=actor, space=space
-        )
+        ) + journal_tools(self.journal_store, actor=actor, space=space)
         if role == "lead":
             tools.append(self._steer_tool(session_id))
             tools.append(self._team_options_tool())
@@ -2072,7 +2089,11 @@ class SessionManager:
         )
 
     def create_team(
-        self, session_id: str, members: list[dict[str, Any]], *, enable_chat: bool = False
+        self,
+        session_id: str,
+        members: list[dict[str, Any]],
+        *,
+        enable_chat: bool = False,
     ) -> dict[str, Any]:
         """The staffing gate's approved action: PRE-SPAWN worker sessions (state on
         disk, zero tokens — the first model turn fires when the first assignment
@@ -2253,9 +2274,7 @@ class SessionManager:
             items = self.team_store.list_items(team.space, self._user_actor())
         except Exception:
             return False
-        return any(
-            i["state"] in ("in_progress", "blocked", "review") for i in items
-        )
+        return any(i["state"] in ("in_progress", "blocked", "review") for i in items)
 
     async def _maybe_backstop_lead(self, team) -> int:
         if not self._lead_backstop_due(team):
@@ -2291,9 +2310,7 @@ class SessionManager:
         # on their slice (assigned ∪ filed) — comments, moves, reassignments. The
         # lead additionally subscribes to the board-wide decision classes.
         directs = self.team_store.feed_for(team.space, actor)
-        subs = (
-            self.team_store.subscribed_events(team.space, actor) if is_lead else []
-        )
+        subs = self.team_store.subscribed_events(team.space, actor) if is_lead else []
         if subs:
             seen = {e["seq"] for e in subs}
             directs = [e for e in directs if e["seq"] not in seen]
@@ -2303,6 +2320,7 @@ class SessionManager:
             if team.chat_enabled and team.chat_group
             else []
         )
+
         # Cancel is top-priority: an in-flight worker gets interrupted NOW; the
         # queued notice (delivered when the turn dies) tells it why. Only for the
         # item's ASSIGNEE — a filer merely hears about it.
@@ -2444,7 +2462,11 @@ class SessionManager:
                 lines.append(
                     f"You've been assigned work item {title}.\n"
                     f"  Done when: {item['criteria']}"
-                    + (f"\n  Details: {item['description']}" if item["description"] else "")
+                    + (
+                        f"\n  Details: {item['description']}"
+                        if item["description"]
+                        else ""
+                    )
                 )
                 rows.append({**row, "kind": "assigned", "assignee": assignee})
             elif event["kind"] == "item_transitioned":
@@ -2570,9 +2592,7 @@ class SessionManager:
         by_state: dict[str, int] = {}
         for item in items:
             by_state[item["state"]] = by_state.get(item["state"], 0) + 1
-        unassigned = sum(
-            1 for i in items if i["state"] == "open" and not i["assignee"]
-        )
+        unassigned = sum(1 for i in items if i["state"] == "open" and not i["assignee"])
         parts = [f"{n} {state}" for state, n in sorted(by_state.items())]
         lines = [f"Board: {', '.join(parts) or 'empty'}."]
         if unassigned:
@@ -2599,7 +2619,10 @@ class SessionManager:
         workspace = record.workspace if record else self.default_workspace
         if workspace and self.is_temp_workspace(workspace):
             return Path(workspace).expanduser().resolve()
-        if self._SESSION_ID_RE.match(session_id or "") and session_id not in {".", ".."}:
+        if self._SESSION_ID_RE.match(session_id or "") and session_id not in {
+            ".",
+            "..",
+        }:
             d = (self.scratch_base() / session_id).resolve()
             if d.is_dir():
                 return d
@@ -2694,7 +2717,10 @@ class SessionManager:
         candidates: list[Path] = []
         if workspace:
             candidates.append(Path(workspace).expanduser().resolve())
-        if self._SESSION_ID_RE.match(session_id or "") and session_id not in {".", ".."}:
+        if self._SESSION_ID_RE.match(session_id or "") and session_id not in {
+            ".",
+            "..",
+        }:
             scratch = (self.scratch_base() / session_id).resolve()
             if scratch.is_dir() and scratch not in candidates:
                 candidates.append(scratch)
@@ -2744,7 +2770,9 @@ class SessionManager:
                     size = 0 if child.is_dir() else child.stat().st_size
                 except OSError:
                     continue
-                entries.append({"name": child.name, "dir": child.is_dir(), "size": size})
+                entries.append(
+                    {"name": child.name, "dir": child.is_dir(), "size": size}
+                )
             return {"ok": True, "path": path, "kind": "folder", "entries": entries}
         kind = _artifact_kind(target)
         if kind == "office":
@@ -2821,7 +2849,11 @@ class SessionManager:
                 else:
                     os.startfile(str(target))  # type: ignore[attr-defined]  # open in default app
             else:  # Linux/BSD
-                tgt = str(target.parent) if mode == "reveal" and not is_dir else str(target)
+                tgt = (
+                    str(target.parent)
+                    if mode == "reveal" and not is_dir
+                    else str(target)
+                )
                 subprocess.Popen(
                     ["xdg-open", tgt],
                     stdout=subprocess.DEVNULL,
@@ -3131,7 +3163,9 @@ class SessionManager:
         if d.needs_key and not has_key_field:
             # Multi-field cloud providers (Bedrock): required fields must be present;
             # actual credentials may be ambient (~/.aws, env) and are checked by the call.
-            missing = [f.label for f in d.fields if f.required and not merged.get(f.key)]
+            missing = [
+                f.label for f in d.fields if f.required and not merged.get(f.key)
+            ]
             if missing:
                 return {"ok": False, "error": "missing: " + ", ".join(missing)}
         return verify_provider_key(
@@ -3287,6 +3321,7 @@ class SessionManager:
 
         env_key = bool(os.environ.get("OPENAI_API_KEY"))
         stored = bool((self.secrets.get("provider:openai") or {}).get("api_key"))
+
         # Only surface models whose provider is actually configured — the composer picker
         # reflects exactly what's connected. The active default is always kept selectable
         # (it's hidden behind the "No model" state until a provider is connected anyway).
@@ -3498,7 +3533,10 @@ class SessionManager:
             try:
                 pct = float(threshold_pct)
             except (TypeError, ValueError):
-                return {"ok": False, "error": "compaction_threshold_pct must be a number"}
+                return {
+                    "ok": False,
+                    "error": "compaction_threshold_pct must be a number",
+                }
             if not 0.10 <= pct <= 0.95:
                 return {
                     "ok": False,
@@ -4349,7 +4387,9 @@ class SessionManager:
                 self.effective_skill_names(sid, w, agent=a)
             ),
             extra_skill_dirs=(
-                [d] if (d := self.persona_skill_scope(task.agent)[0]) is not None else None
+                [d]
+                if (d := self.persona_skill_scope(task.agent)[0]) is not None
+                else None
             ),
         )
         self._seed_task_permissions(engine, task)
@@ -4401,10 +4441,7 @@ class SessionManager:
         if item is None:
             return
         protected_kinds = {"approval", "directory", "plan"}
-        if (
-            getattr(event, "platform", "") == "slack"
-            and item.kind in protected_kinds
-        ):
+        if getattr(event, "platform", "") == "slack" and item.kind in protected_kinds:
             actor_id = str(getattr(event, "user_id", "") or "")
             if not self._slack_actor_owns_item(
                 item,
@@ -4446,10 +4483,11 @@ class SessionManager:
             item = self.inbox.get(item_id)
             if item is None:
                 return False
-            if (
-                getattr(event.source, "platform", "") == "slack"
-                and item.kind in {"approval", "directory", "plan"}
-            ):
+            if getattr(event.source, "platform", "") == "slack" and item.kind in {
+                "approval",
+                "directory",
+                "plan",
+            }:
                 actor_id = str(getattr(event.source, "user_id", "") or "")
                 if not self._slack_actor_owns_item(
                     item,
@@ -5363,7 +5401,9 @@ class SessionManager:
                         agent="cowork",  # folder access is a Cowork affordance
                     )
                 )
-            session_scratch = str((self.scratch_base() / session_id).expanduser().resolve())
+            session_scratch = str(
+                (self.scratch_base() / session_id).expanduser().resolve()
+            )
             extra = [
                 r
                 for r in self.get_roots(session_id)
@@ -5620,7 +5660,9 @@ class SessionManager:
             )
             row["actor"] = info["actor"]
             row["current_item"] = (
-                f"#{active['id']} {active['state'].replace('_', ' ')}" if active else "idle"
+                f"#{active['id']} {active['state'].replace('_', ' ')}"
+                if active
+                else "idle"
             )
             row["status"] = active["state"] if active else "idle"
         return row
@@ -5719,12 +5761,14 @@ class SessionManager:
         The single resolver behind the engine catalog, the rail list, and the composer popup.
         Persona-carried skills (OPE-58) join the merge for the session's persona — user
         disables and mutes still win over them."""
-        dirs = [self.skill_store.global_dir]
+        dirs = [BUILTIN_SKILLS_DIR, self.skill_store.global_dir]
         if workspace:
             dirs.append(self.skill_store.project_dir(workspace))
         loader = SkillLoader(dirs)
         names = set(loader.names())
-        persona_dir, allow = self.persona_skill_scope(self._persona_of(session_id, agent))
+        persona_dir, allow = self.persona_skill_scope(
+            self._persona_of(session_id, agent)
+        )
         if persona_dir is not None:
             persona_names = set(SkillLoader([persona_dir]).names())
             if allow is not None:
@@ -5771,6 +5815,20 @@ class SessionManager:
                         "enabled": overrides.get(name, True),
                     }
                 )
+        # Shipped builtin skills (package data): same rail treatment as persona-carried
+        # skills — listed, session-mutable, hidden when a user copy of the same name exists.
+        for entry in SkillLoader([BUILTIN_SKILLS_DIR]).catalog():
+            name = entry["name"]
+            if name in seen or name in disabled:
+                continue  # a global/project copy shadows the builtin's
+            rows.append(
+                {
+                    "name": name,
+                    "description": entry["description"],
+                    "scope": "builtin",
+                    "enabled": overrides.get(name, True),
+                }
+            )
         return {"skills": rows}
 
     def _scratch_workspace_error(self, workspace: Any) -> Optional[dict[str, Any]]:
@@ -5813,7 +5871,10 @@ class SessionManager:
         try:
             if "enabled" in body:
                 self.skill_store.set_enabled(name, bool(body["enabled"]))
-            if body.get("description") is not None or body.get("instructions") is not None:
+            if (
+                body.get("description") is not None
+                or body.get("instructions") is not None
+            ):
                 self.skill_store.update(
                     name,
                     description=body.get("description"),
@@ -5824,7 +5885,9 @@ class SessionManager:
             return {"ok": False, "error": str(exc)}
         return {"ok": True}
 
-    def delete_skill(self, name: str, workspace: Optional[str] = None) -> dict[str, Any]:
+    def delete_skill(
+        self, name: str, workspace: Optional[str] = None
+    ) -> dict[str, Any]:
         try:
             self.skill_store.delete(name, workspace or None)
         except ValueError as exc:
@@ -5961,9 +6024,7 @@ class SessionManager:
         if not ws:
             return {"ok": False, "error": "session has no workspace"}
         try:
-            entry = self.session_store.names().name_current(
-                kind, name, project_key(ws)
-            )
+            entry = self.session_store.names().name_current(kind, name, project_key(ws))
         except ValueError as e:
             return {"ok": False, "error": str(e)}
         return {"ok": True, **entry}

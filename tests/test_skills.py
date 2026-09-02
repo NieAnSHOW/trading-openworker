@@ -5,7 +5,12 @@ from __future__ import annotations
 from coworker.agent import build_engine
 from coworker.agents import AgentContext, chat_agent, code_agent, get_agent
 from coworker.providers import ModelCapabilities
-from coworker.skills import SkillLoader, skill_catalog_text, skill_tools
+from coworker.skills import (
+    BUILTIN_SKILLS_DIR,
+    SkillLoader,
+    skill_catalog_text,
+    skill_tools,
+)
 from coworker.tools import ToolRegistry
 from coworker.tools.shell import LocalExecutor
 from coworker.tools.todo import TodoList
@@ -79,6 +84,30 @@ def test_skill_loader_catalog_and_load(tmp_path):
     loaded = reg.execute("load_skill", {"name": "pdf"})
     assert "pdfplumber" in loaded["instructions"]
     assert reg.execute("load_skill", {"name": "missing"})["error"]
+
+
+# -- shipped builtin skills ------------------------------------------------------
+
+
+def test_builtin_skills_ship_and_parse():
+    loader = SkillLoader([BUILTIN_SKILLS_DIR])
+    names = loader.names()
+    assert len(names) >= 80 and len(names) == len(set(names))
+    assert "akshare" in names
+    assert all(c["description"].strip() for c in loader.catalog())
+
+
+def test_builtin_shadowed_by_user_copy(tmp_path):
+    user = tmp_path / "skills" / "akshare"
+    user.mkdir(parents=True)
+    (user / "SKILL.md").write_text(
+        "---\nname: akshare\ndescription: user override\n---\nUSER BODY",
+        encoding="utf-8",
+    )
+    # Builtin dir first: later dirs overwrite earlier in the loader.
+    loader = SkillLoader([BUILTIN_SKILLS_DIR, tmp_path / "skills"])
+    s = loader.get("akshare")
+    assert s.description == "user override" and "USER BODY" in s.instructions
 
 
 # -- engine assembly per agent --------------------------------------------------

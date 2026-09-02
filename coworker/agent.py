@@ -38,7 +38,13 @@ from .roots import RootDir, normalize_roots, render_context
 from .providers import ProviderClient, ProviderRouter
 from .overrides import RiskOverrideStore
 from .secrets import SecretStore, state_dir
-from .skills import SkillLoader, save_skill_tool, skill_catalog_text, skill_tools
+from .skills import (
+    BUILTIN_SKILLS_DIR,
+    SkillLoader,
+    save_skill_tool,
+    skill_catalog_text,
+    skill_tools,
+)
 from .tools import ToolRegistry
 from .tools.ask import ask_user_tool
 from .tools.directories import request_directory_tool
@@ -362,7 +368,9 @@ def build_engine(
     if wake_store is not None and session_id and agent.scheduling:
         registry.register_all(selfwake_tools(wake_store, session_id))
 
-    instructions = f"{agent.system_prompt}\n\n{_NARRATION_GUIDANCE}\n\n{_FIRST_CONTACT_GUIDANCE}"
+    instructions = (
+        f"{agent.system_prompt}\n\n{_NARRATION_GUIDANCE}\n\n{_FIRST_CONTACT_GUIDANCE}"
+    )
     if ws is not None:
         instructions = f"{instructions}\n\n{environment_context(ws)}"
         conventions = load_agents_md(ws)
@@ -413,9 +421,13 @@ def build_engine(
         if block:
             instructions = f"{instructions}\n\n{block}"
 
-    # Persona dirs come FIRST so a user's global/workspace copy of the same name shadows
-    # the bundle's (later dirs overwrite earlier in the loader).
-    skill_loader = SkillLoader([Path(d) for d in (extra_skill_dirs or [])] + _skill_dirs(ws))
+    # Priority (later dirs overwrite earlier in the loader): builtin < persona bundle <
+    # user global < project — a user's copy of the same name shadows the shipped one.
+    skill_loader = SkillLoader(
+        [BUILTIN_SKILLS_DIR]  # shipped baseline; user/project/persona copies shadow it
+        + [Path(d) for d in (extra_skill_dirs or [])]
+        + _skill_dirs(ws)
+    )
     # Per-session effective menu (SKILLS-SPEC §3). The manager passes a CALLABLE so
     # load_skill consults the LIVE state per call (a Settings disable applies to running
     # sessions; a skill created after this build is still loadable). The catalog itself

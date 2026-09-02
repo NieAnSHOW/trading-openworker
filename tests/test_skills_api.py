@@ -164,14 +164,21 @@ def test_scratch_workspace_rejected_for_skill_writes(tmp_path):
     ).json()
     res = client.post(
         "/v1/skills/upload/confirm",
-        json={"token": preview["token"], "scope": "project", "workspace": str(scratch_ws)},
+        json={
+            "token": preview["token"],
+            "scope": "project",
+            "workspace": str(scratch_ws),
+        },
     ).json()
     assert res["ok"] is False and "temporary" in res["error"].lower()
 
     # Rescue path: a skill already stranded in scratch can still move OUT to global.
     manager.skill_store.create(
-        name="stranded", description="", instructions="x",
-        scope="project", workspace=scratch_ws,
+        name="stranded",
+        description="",
+        instructions="x",
+        scope="project",
+        workspace=scratch_ws,
     )
     res = client.post(
         "/v1/skills/stranded/move",
@@ -235,7 +242,10 @@ def test_upload_invalid_archive_friendly(tmp_path):
     # A bare .md without frontmatter gets the md-specific guidance.
     bare = client.post(
         "/v1/skills/upload",
-        json={"data_b64": base64.b64encode(b"no frontmatter").decode(), "filename": "a.md"},
+        json={
+            "data_b64": base64.b64encode(b"no frontmatter").decode(),
+            "filename": "a.md",
+        },
     ).json()
     assert bare["ok"] is False and "frontmatter" in bare["error"].lower()
     assert client.post("/v1/skills/upload", json={}).json()["ok"] is False
@@ -250,7 +260,10 @@ def test_draft_endpoint_is_gone(tmp_path):
     client, _m, _p = _client(tmp_path)
     # 405 not 404: the path now falls through to PATCH /v1/skills/{name}. Either way,
     # POSTing a draft is no longer a thing.
-    assert client.post("/v1/skills/draft", json={"description": "x"}).status_code in (404, 405)
+    assert client.post("/v1/skills/draft", json={"description": "x"}).status_code in (
+        404,
+        405,
+    )
 
 
 # -- session mutes over HTTP ----------------------------------------------------------
@@ -259,9 +272,19 @@ def test_draft_endpoint_is_gone(tmp_path):
 def test_session_mute_roundtrip(tmp_path):
     client, _m, _p = _client(tmp_path)
     client.post("/v1/skills", json=GREET)
-    view = client.get("/v1/sessions/s1/skills").json()["skills"]
+    view = [
+        r
+        for r in client.get("/v1/sessions/s1/skills").json()["skills"]
+        if r["scope"]
+        != "builtin"  # shipped skills ride along; user rows are the spec here
+    ]
     assert view == [
-        {"name": "greet", "description": "says hello", "scope": "global", "enabled": True}
+        {
+            "name": "greet",
+            "description": "says hello",
+            "scope": "global",
+            "enabled": True,
+        }
     ]
     after = client.post(
         "/v1/sessions/s1/skills", json={"skill": "greet", "enabled": False}
@@ -300,7 +323,7 @@ def test_engine_catalog_respects_settings_disable(tmp_path):
     # The menu rides the live per-turn context block (§4.1), not the system prompt.
     menu = engine.context_provider()
     assert "greet" in menu
-    assert "hidden" not in menu
+    assert "\n- hidden:" not in menu
     assert "greet" not in engine.messages[0]["content"]
 
 

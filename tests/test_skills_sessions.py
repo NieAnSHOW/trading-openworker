@@ -13,6 +13,7 @@ import pytest
 
 from coworker.providers import ModelCapabilities, ProviderClient
 from coworker.skills import (
+    BUILTIN_SKILLS_DIR,
     SessionSkillStore,
     SkillLoader,
     SkillStore,
@@ -21,6 +22,9 @@ from coworker.skills import (
     skill_tools,
 )
 from coworker.server.manager import SessionManager
+
+# Shipped package-data skills: the baseline menu every manager/session starts with.
+BUILTINS = frozenset(SkillLoader([BUILTIN_SKILLS_DIR]).names())
 
 
 class ScriptedProvider(ProviderClient):
@@ -59,17 +63,21 @@ def test_project_copy_wins_merge(tmp_path):
 
 
 def test_disabled_absent_everywhere():
-    assert effective_skills(
-        names={"a", "b"}, disabled={"a"}, session_overrides={}
-    ) == {"b"}
+    assert effective_skills(names={"a", "b"}, disabled={"a"}, session_overrides={}) == {
+        "b"
+    }
 
 
 def test_mute_hides_in_that_session_only(tmp_path):
     store = SessionSkillStore(tmp_path / "s.json")
     store.set("s1", "a", False)
     names = {"a", "b"}
-    s1 = effective_skills(names=names, disabled=set(), session_overrides=store.get("s1"))
-    s2 = effective_skills(names=names, disabled=set(), session_overrides=store.get("s2"))
+    s1 = effective_skills(
+        names=names, disabled=set(), session_overrides=store.get("s1")
+    )
+    s2 = effective_skills(
+        names=names, disabled=set(), session_overrides=store.get("s2")
+    )
     assert s1 == {"b"} and s2 == {"a", "b"}
 
 
@@ -89,13 +97,15 @@ def test_mute_of_unknown_skill_is_noop():
 
 def test_any_off_wins_both_directions():
     # enabled in Settings + muted in session → out
-    assert effective_skills(
-        names={"a"}, disabled=set(), session_overrides={"a": False}
-    ) == set()
+    assert (
+        effective_skills(names={"a"}, disabled=set(), session_overrides={"a": False})
+        == set()
+    )
     # disabled in Settings + explicit session-on → STILL out (no resurrection)
-    assert effective_skills(
-        names={"a"}, disabled={"a"}, session_overrides={"a": True}
-    ) == set()
+    assert (
+        effective_skills(names={"a"}, disabled={"a"}, session_overrides={"a": True})
+        == set()
+    )
 
 
 def test_override_store_survives_reload(tmp_path):
@@ -119,14 +129,17 @@ def test_no_workspace_means_global_only(manager, tmp_path):
     ws = tmp_path / "elsewhere"
     (ws / ".coworker" / "skills").mkdir(parents=True)
     _skill(ws / ".coworker" / "skills", "local-only")
-    assert manager.effective_skill_names("s1") == {"everywhere"}
-    assert manager.effective_skill_names("s1", ws) == {"everywhere", "local-only"}
+    assert manager.effective_skill_names("s1") == {"everywhere"} | BUILTINS
+    assert (
+        manager.effective_skill_names("s1", ws)
+        == {"everywhere", "local-only"} | BUILTINS
+    )
 
 
 def test_workspace_without_skills_dir_is_fine(manager, tmp_path):
     ws = tmp_path / "bare-ws"
     ws.mkdir()
-    assert manager.effective_skill_names("s1", ws) == set()
+    assert manager.effective_skill_names("s1", ws) == BUILTINS
 
 
 def test_empty_catalog_is_safe(tmp_path):
@@ -165,20 +178,20 @@ def test_live_load_skill_semantics(manager):
     manager.create_skill(
         {"name": "late", "description": "d", "instructions": "late body"}
     )
-    assert "late" in engine.context_provider()
+    assert "\n- late:" in engine.context_provider()
     loaded = engine.registry.execute("load_skill", {"name": "late"})
     assert loaded["instructions"] == "late body"
 
     # disable → gone from the menu next turn, refused on load, listed nowhere
     manager.skill_store.set_enabled("early", False)
-    assert "early" not in engine.context_provider()
+    assert "\n- early:" not in engine.context_provider()
     refused = engine.registry.execute("load_skill", {"name": "early"})
     assert refused["error"].startswith("unknown skill")
     assert "early" not in refused["available"]
 
     # delete ≡ disable, from the model's side
     manager.delete_skill("late")
-    assert "late" not in engine.context_provider()
+    assert "\n- late:" not in engine.context_provider()
     gone = engine.registry.execute("load_skill", {"name": "late"})
     assert gone["error"].startswith("unknown skill")
 
@@ -260,6 +273,22 @@ def test_parity_catalog_vs_rail_view(manager):
     view_names = {r["name"] for r in view}
     view_on = {r["name"] for r in view if r["enabled"]}
 
-    assert menu == {"alpha"}
-    assert view_names == {"alpha", "gamma"}  # disabled hidden; muted still listed (toggle)
+    assert menu == {"alpha"} | BUILTINS
+    assert (
+        view_names == {"alpha", "gamma"} | BUILTINS
+    )  # disabled hidden; muted still listed (toggle)
     assert view_on == menu  # what's ON in the rail == what the model sees
+
+
+def test_builtin_skills_shipped_into_menu_and_rail(manager):
+    """Package-data builtins join every session: loadable, listed on the rail with the
+    "builtin" scope, and governed like any user skill (Settings disable wins)."""
+    assert BUILTINS <= manager.effective_skill_names("s1")
+    rows = {r["name"]: r for r in manager.session_skills_view("s1")["skills"]}
+    assert {r["scope"] for r in rows.values() if r["name"] in BUILTINS} == {"builtin"}
+    one = sorted(BUILTINS)[0]
+    manager.skill_store.set_enabled(one, False)
+    assert one not in manager.effective_skill_names("s1")
+    assert one not in {r["name"] for r in manager.session_skills_view("s1")["skills"]}
+    manager.skill_store.set_enabled(one, True)
+    assert one in manager.effective_skill_names("s1")
