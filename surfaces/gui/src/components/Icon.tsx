@@ -43,7 +43,17 @@ export type IconName =
   | "mic"
   | "stop"
   | "warning"
-  | "x";
+  | "checkCircle"
+  | "xCircle"
+  | "arrowRight"
+  | "compare"
+  | "download"
+  | "list"
+  | "barChart"
+  | "fileCheck"
+  | "fingerprint"
+  | "database"
+  | "x"
 
 export function Icon({
   name,
@@ -168,13 +178,87 @@ export function Icon({
       return (
         <svg {...s}>
           <rect x="8.5" y="3.5" width="7" height="11" rx="3.5" />
-          <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M8.5 21.5h7" />
+          <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0" />
+          <path d="M12 18v2.5" />
         </svg>
       );
-    case "stop":
+    case "checkCircle":
       return (
-        <svg {...s} fill="currentColor" stroke="none">
-          <rect x="6.5" y="6.5" width="11" height="11" rx="1.5" />
+        <svg {...s}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M8.5 12.2l2.4 2.4 4.6-5" />
+        </svg>
+      );
+    case "xCircle":
+      return (
+        <svg {...s}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M9.2 9.2l5.6 5.6M14.8 9.2l-5.6 5.6" />
+        </svg>
+      );
+    case "arrowRight":
+      return (
+        <svg {...s}>
+          <path d="M4 12h16M14 6l6 6-6 6" />
+        </svg>
+      );
+    case "compare":
+      return (
+        <svg {...s}>
+          <path d="M16 3l4 4-4 4" />
+          <path d="M20 7H8a4 4 0 0 0-4 4" />
+          <path d="M8 21l-4-4 4-4" />
+          <path d="M4 17h12a4 4 0 0 0 4-4" />
+        </svg>
+      );
+    case "download":
+      return (
+        <svg {...s}>
+          <path d="M12 3v12M7 10l5 5 5-5" />
+          <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+        </svg>
+      );
+    case "list":
+      return (
+        <svg {...s}>
+          <path d="M9 6h11M9 12h11M9 18h11" />
+          <circle cx="4.5" cy="6" r="0.8" fill="currentColor" />
+          <circle cx="4.5" cy="12" r="0.8" fill="currentColor" />
+          <circle cx="4.5" cy="18" r="0.8" fill="currentColor" />
+        </svg>
+      );
+    case "barChart":
+      return (
+        <svg {...s}>
+          <path d="M4 20V10M10 20V4M16 20v-7M4 20h16" />
+        </svg>
+      );
+    case "fileCheck":
+      return (
+        <svg {...s}>
+          <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z" />
+          <path d="M14 2v5h5" />
+          <path d="M9.5 14.5l2 2 3.5-4" />
+        </svg>
+      );
+    case "fingerprint":
+      return (
+        <svg {...s}>
+          <path d="M12 11a3 3 0 0 1 3 3c0 2.5-.5 4.5-1.5 6" />
+          <path d="M9 14a3 3 0 0 1 .2-1.1" />
+          <path d="M12 7a7 7 0 0 1 7 7c0 1.3-.1 2.6-.4 3.8" />
+          <path d="M5 14a7 7 0 0 1 3.1-5.8" />
+          <path d="M12 3.5A10.5 10.5 0 0 1 22.5 14c0 .7 0 1.4-.1 2" />
+          <path d="M2.6 10.5A10.5 10.5 0 0 1 8 4.6" />
+          <path d="M6.2 17.5c.5-1.2.8-2.5.8-3.5" />
+        </svg>
+      );
+    case "database":
+      return (
+        <svg {...s}>
+          <ellipse cx="12" cy="5.5" rx="8" ry="3" />
+          <path d="M4 5.5V12c0 1.7 3.6 3 8 3s8-1.3 8-3V5.5" />
+          <path d="M4 12v6.5c0 1.7 3.6 3 8 3s8-1.3 8-3V12" />
         </svg>
       );
     case "x":
@@ -183,7 +267,12 @@ export function Icon({
           <path d="M6 6l12 12M18 6L6 18" />
         </svg>
       );
-    case "warning":
+    case "stop":
+      return (
+        <svg {...s} fill="currentColor" stroke="none">
+          <rect x="6.5" y="6.5" width="11" height="11" rx="1.5" />
+        </svg>
+      );
       // Caution triangle (Lucide-style): rounded triangle + exclamation. Marks the
       // bypass-approvals mode in the picker — the one option that switches approvals off.
       return (

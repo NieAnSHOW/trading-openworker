@@ -111,6 +111,13 @@
   --fs-label: 11px;    /* 600 — uppercase labels (+0.08em) and captions */
   /* The right rail's width while reading an artifact (wider than the 332px inspector). */
   --artifact-rail-w: min(62vw, 960px);
+  /* Chart palette (echarts, lib/chart-theme.ts) — kept here so light/dark flow
+     through the same source of truth as every other token. */
+  --chart-grid: #e8eaed;
+  --chart-text: #4d535c;
+  --chart-axis: #6f7680;
+  --chart-compare-a: #2563eb;
+  --chart-compare-b: #d97706;
 }
 
 /* Dark palette. `data-theme` is set on <html> by an inline script in index.html (pre-paint)
@@ -150,6 +157,11 @@ html[data-theme="dark"] {
   --scrim: rgba(0, 0, 0, 0.5);
   --check-a: #25272c;
   --check-b: #1c1e22;
+  --chart-grid: #262a31;
+  --chart-text: #9aa1ab;
+  --chart-axis: #6f7680;
+  --chart-compare-a: #4c8dff;
+  --chart-compare-b: #e8b04b;
 }
 
 * { box-sizing: border-box; }

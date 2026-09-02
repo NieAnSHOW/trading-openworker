@@ -48,11 +48,11 @@ import { PersonasTab } from "./PersonasTab";
 import { SkillsTab } from "./SkillsTab";
 import { showPersonas } from "../flags";
 
-// Settings, restructured (Option 2) into a full-page surface that mirrors IntegrationsView's shell:
-// a left sub-nav (Appearance · Files · Models · Personas) + centered panel, replacing the old
+// Settings as a global modal overlaying the active surface (chat stays put), keeping
+// IntegrationsView's shell inside the panel: a left sub-nav + centered content, replacing the old
 // top-tab ManageModal. Local/app concerns live here; anything external (Connectors, Messaging, MCP,
-// Activity) stays under Integrations. Appearance + Files are re-skinned to the mock's Tailwind idiom;
-// Models + Personas host the existing tab components inside the page shell (field re-skin to follow).
+// Activity) stays under Integrations. Models + Personas host the existing tab components
+// inside the panel shell (field re-skin to follow).
 // "appearance" is the General tab's stable key — callers deep-link with it, so the
 // rename (UX-021) changed only the label. "files" folded into General as a card.
 type SetTab = "appearance" | "models" | "context" | "skills" | "voice" | "memory" | "personas";
@@ -82,10 +82,12 @@ const SET_TABS: {
 
 export function SettingsView({
   initialTab,
+  onClose,
   onOpenPersona,
   onCreateSkill,
 }: {
   initialTab?: SetTab;
+  onClose: () => void;
   onOpenPersona?: (id: string) => void;
   // Skills doorway (SKILLS-SPEC §5.2): start a new conversation with the description
   // prefilled — the worker builds the skill and proposes it via save_skill.
@@ -93,69 +95,89 @@ export function SettingsView({
 }) {
   const { t } = useTranslation();
   // Personas is flag-gated (hidden for launch) — filter the tab AND coerce a stale
-  // deep-link to it (openSettings("personas") callers) so the page never opens on a
+  // deep-link to it (openSettings("personas") callers) so the modal never opens on a
   // section with no nav entry.
   const personas = showPersonas();
   const tabs = personas ? SET_TABS : SET_TABS.filter((tab) => tab.key !== "personas");
   const wanted = initialTab && (personas || initialTab !== "personas") ? initialTab : "appearance";
   const [tab, setTab] = useState<SetTab>(wanted);
 
-  return (
-    <main className="flex-1 min-w-0 flex bg-paper">
-      <nav className="page-subnav w-[208px] shrink-0 border-r border-line bg-panel/40 px-3 py-4">
-        <div className="px-2 text-[13px] font-semibold mb-3 flex items-center gap-2">
-          <Icon name="gear" size={16} /> {t("nav.settings")}
-        </div>
-        {tabs.map((tb) => {
-          const active = tab === tb.key;
-          return (
-            <button
-              key={tb.key}
-              className={
-                "w-full text-left px-2.5 py-2 rounded-lg text-[13px] flex items-center gap-2 " +
-                (active ? "bg-paper text-accent font-medium" : "text-muted hover:bg-paper hover:text-ink")
-              }
-              onClick={() => setTab(tb.key)}
-            >
-              <Icon name={tb.icon} size={15} /> {t(tb.labelKey)}
-            </button>
-          );
-        })}
-      </nav>
+  // Esc closes the modal. Window-level: focus usually sits in a field inside the panel,
+  // and a root onKeyDown would never see the event. Backdrop click covers the mouse.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
-      <div className="flex-1 min-w-0 overflow-y-auto hairline-scroll">
-        <div className="max-w-3xl mx-auto px-7 py-6">
-          {tab === "appearance" ? (
-            <AppearanceSection />
-          ) : tab === "models" ? (
-            <section>
-              <PanelHead
-                title={t("settings.tab.models")}
-                sub={t("settings.models_sub")}
-              />
-              <ModelsTab />
-            </section>
-          ) : tab === "context" ? (
-            <section>
-              <PanelHead
-                title="Context optimization"
-                sub="How sessions spend tokens — attachment handling and long-history compaction."
-              />
-              <TokenSavingsCard />
-              <CompactionCard />
-            </section>
-          ) : tab === "skills" ? (
-            <SkillsTab onCreateSkill={onCreateSkill} />
-          ) : tab === "voice" ? (
-            <VoiceInputSection />
-          ) : tab === "memory" ? (
-            <MemorySection />
-          ) : (
-            <PersonasSection onOpenPersona={onOpenPersona} />
-          )}
+  return (
+    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-[1px]" onClick={onClose} />
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex w-[min(980px,94vw)] h-[min(700px,86vh)] rounded-xl2 border border-line bg-paper shadow-2xl overflow-hidden">
+        <nav className="page-subnav w-[208px] shrink-0 border-r border-line bg-panel/40 px-3 py-4">
+          <div className="px-2 text-[13px] font-semibold mb-3 flex items-center gap-2">
+            <Icon name="gear" size={16} /> {t("nav.settings")}
+            <button
+              onClick={onClose}
+              aria-label={t("modal.close")}
+              className="ml-auto p-1 rounded-md text-faint hover:text-ink hover:bg-paper"
+            >
+              <Icon name="x" size={15} />
+            </button>
+          </div>
+          {tabs.map((tb) => {
+            const active = tab === tb.key;
+            return (
+              <button
+                key={tb.key}
+                className={
+                  "w-full text-left px-2.5 py-2 rounded-lg text-[13px] flex items-center gap-2 " +
+                  (active ? "bg-paper text-accent font-medium" : "text-muted hover:bg-paper hover:text-ink")
+                }
+                onClick={() => setTab(tb.key)}
+              >
+                <Icon name={tb.icon} size={15} /> {t(tb.labelKey)}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="flex-1 min-w-0 overflow-y-auto hairline-scroll">
+          <div className="max-w-3xl mx-auto px-7 py-6">
+            {tab === "appearance" ? (
+              <AppearanceSection />
+            ) : tab === "models" ? (
+              <section>
+                <PanelHead
+                  title={t("settings.tab.models")}
+                  sub={t("settings.models_sub")}
+                />
+                <ModelsTab />
+              </section>
+            ) : tab === "context" ? (
+              <section>
+                <PanelHead
+                  title="Context optimization"
+                  sub="How sessions spend tokens — attachment handling and long-history compaction."
+                />
+                <TokenSavingsCard />
+                <CompactionCard />
+              </section>
+            ) : tab === "skills" ? (
+              <SkillsTab onCreateSkill={onCreateSkill} />
+            ) : tab === "voice" ? (
+              <VoiceInputSection />
+            ) : tab === "memory" ? (
+              <MemorySection />
+            ) : (
+              <PersonasSection onOpenPersona={onOpenPersona} />
+            )}
+          </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
 

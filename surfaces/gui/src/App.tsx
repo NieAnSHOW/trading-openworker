@@ -75,7 +75,7 @@ import { SettingsView } from "./components/SettingsView";
 import { PersonaView } from "./components/PersonaView";
 import { AuditView } from "./components/AuditView";
 import { InboxView } from "./components/InboxView";
-import { AlphaZooView } from "./components/AlphaZooView";
+import { ResearchView } from "./components/ResearchView";
 import { ApprovalCard } from "./components/ApprovalCard";
 import { ToolRequestCard } from "./components/ToolRequestCard";
 import { DirectoryRequestCard } from "./components/DirectoryRequestCard";
@@ -260,22 +260,25 @@ export function App() {
   // "Loading…" forever (owner-hit 2026-07-20). Nav re-entry should land on the list.
   const [scheduledOpenId, setScheduledOpenId] = useState<string | null>(null);
   const [gateCreate, setGateCreate] = useState(false);
-  // Which Settings section the full-page Settings surface opens on (§ Settings-as-page).
+  // Settings is a global modal over the active surface (chat stays put). settingsTab is the
+  // section it opens on; openSettings is the one entry point (⌘,, tray event, composer
+  // chips, Sidebar manage row) — ⌘, additionally toggles.
   const [settingsTab, setSettingsTab] = useState<
     "appearance" | "models" | "skills" | "voice" | "memory" | "personas"
   >("appearance");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const openSettings = (
     tab: "appearance" | "models" | "skills" | "voice" | "memory" | "personas" = "appearance",
   ) => {
     setSettingsTab(tab);
-    setSurface("settings");
+    setSettingsOpen(true);
   };
   // Whether the default model's provider is actually configured (any provider). Drives the
   // composer's "No model connected" chip. Default true so we don't flash the chip before settings
   // load; corrected by loadSettings.
   const [modelReady, setModelReady] = useState(true);
   const [surface, setSurface] = useState<
-    "session" | "scheduled" | "integrations" | "audit" | "inbox" | "persona" | "settings" | "alphazoo"
+    "session" | "scheduled" | "integrations" | "audit" | "inbox" | "persona" | "research"
   >("session");
   // A remembered Scheduled-detail target must not outlive the surface (see the
   // scheduledOpenId comment above): nav re-entry lands on the list, never a
@@ -360,7 +363,7 @@ export function App() {
       // ⌘, — the platform Settings shortcut (advertised in the account menu, §26).
       if ((e.metaKey || e.ctrlKey) && e.key === ",") {
         e.preventDefault();
-        setSurface("settings");
+        setSettingsOpen((v) => !v);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -625,11 +628,10 @@ export function App() {
   // Open Settings → Configure Models (from the composer's "No model connected" chip).
   const openModelSetup = () => openSettings("models");
 
-  // Leaving the Settings page: pick up any model/surface changes for the composer (the modal used to
-  // do this on close).
+  // Closing the Settings modal: pick up any model/surface changes for the composer.
   useEffect(() => {
-    if (surface !== "settings") loadSettings();
-  }, [surface]);
+    if (!settingsOpen) loadSettings();
+  }, [settingsOpen]);
 
   useEffect(() => {
     refreshSessions();
@@ -1743,14 +1745,14 @@ export function App() {
           setSurface("scheduled");
         }}
         onOpenIntegrations={() => setSurface("integrations")}
-        onOpenAlphaZoo={() => setSurface("alphazoo")}
+        onOpenResearch={() => setSurface("research")}
         onOpenAudit={() => setSurface("audit")}
         onOpenInbox={() => setSurface("inbox")}
         scheduledActive={surface === "scheduled"}
         integrationsActive={surface === "integrations"}
         auditActive={surface === "audit"}
         inboxActive={surface === "inbox"}
-        alphaZooActive={surface === "alphazoo"}
+        researchActive={surface === "research"}
         collapsed={navCollapsed}
         onCollapse={toggleNav}
         onPeekLeave={() => setNavPeek(false)}
@@ -1763,25 +1765,8 @@ export function App() {
         />
       ) : surface === "integrations" ? (
         <IntegrationsView />
-      ) : surface === "alphazoo" ? (
-        <AlphaZooView />
-      ) : surface === "settings" ? (
-        <SettingsView
-          key={settingsTab}
-          initialTab={settingsTab}
-          onOpenPersona={(id) => openPersona(id, "settings")}
-          onCreateSkill={(description) => {
-            // The Skills doorway (SKILLS-SPEC §5.2): creation is a conversation. Fresh
-            // session, description in the composer — the user reads and hits send. With
-            // no description, the prefill invites them to finish the sentence there.
-            startNewSession();
-            prefillComposer(
-              description
-                ? t("app.build_skill_prefill", { description })
-                : t("app.build_skill_prefill_empty"),
-            );
-          }}
-        />
+      ) : surface === "research" ? (
+        <ResearchView />
       ) : surface === "audit" ? (
         <AuditView />
       ) : surface === "inbox" ? (
@@ -2232,6 +2217,32 @@ export function App() {
 
       {/* Search from the collapsed-sidebar topbar cluster (the sidebar's own instance is
           unreachable while it's collapsed). */}
+      {/* Settings is a global modal over whatever surface is active — the chat stays put. */}
+      {settingsOpen && (
+        <SettingsView
+          key={settingsTab}
+          initialTab={settingsTab}
+          onClose={() => setSettingsOpen(false)}
+          onOpenPersona={(id) => {
+            // Persona is a full surface; drop the modal so it isn't buried underneath.
+            setSettingsOpen(false);
+            openPersona(id, "settings");
+          }}
+          onCreateSkill={(description) => {
+            // The Skills doorway (SKILLS-SPEC §5.2): creation is a conversation. Fresh
+            // session, description in the composer — the user reads and hits send. With
+            // no description, the prefill invites them to finish the sentence there.
+            setSettingsOpen(false);
+            startNewSession();
+            prefillComposer(
+              description
+                ? t("app.build_skill_prefill", { description })
+                : t("app.build_skill_prefill_empty"),
+            );
+          }}
+        />
+      )}
+
       {searchOpen && (
         <SearchModal
           sessions={sessions}

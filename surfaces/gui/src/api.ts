@@ -2645,3 +2645,177 @@ export async function getAlphaCompareStatus(jobId: string): Promise<AlphaJobView
   if (data.job) return data.job;
   throw new Error(data.error || "Compare job not found");
 }
+
+// --- Backtest reports (Vibe-Trading run library; /v1/reports/*) ---
+
+export interface RunListItem {
+  run_id: string;
+  status: string;
+  created_at: string;
+  prompt?: string;
+  total_return?: number;
+  sharpe?: number;
+  codes?: string[];
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface PriceBar {
+  time: string;
+  timestamp?: string;
+  code?: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface IndicatorPoint {
+  time: string;
+  value: number | null;
+}
+
+export interface TradeMarker {
+  time: string;
+  timestamp?: string;
+  code?: string;
+  side: "BUY" | "SELL";
+  price?: number | null;
+  qty?: number | null;
+  reason?: string | null;
+  text?: string;
+}
+
+export interface EquityPoint {
+  time: string;
+  equity: string | number;
+  drawdown: string | number;
+}
+
+export interface ValidationData {
+  monte_carlo?: {
+    actual_sharpe: number;
+    actual_max_dd: number;
+    p_value_sharpe: number;
+    p_value_max_dd: number;
+    simulated_sharpe_mean: number;
+    simulated_sharpe_std: number;
+    simulated_sharpe_p5: number;
+    simulated_sharpe_p95: number;
+    n_simulations: number;
+    error?: string;
+  };
+  bootstrap?: {
+    observed_sharpe: number;
+    ci_lower: number;
+    ci_upper: number;
+    median_sharpe: number;
+    prob_positive: number;
+    n_bootstrap: number;
+    confidence: number;
+    error?: string;
+  };
+  walk_forward?: {
+    n_windows: number;
+    profitable_windows: number;
+    consistency_rate: number;
+    return_mean: number;
+    return_std: number;
+    sharpe_mean: number;
+    sharpe_std: number;
+    windows: Array<{
+      window: number;
+      start: string;
+      end: string;
+      return: number;
+      sharpe: number;
+      max_dd: number;
+      trades: number;
+      win_rate: number;
+    }>;
+    error?: string;
+  };
+}
+
+export interface RunCard {
+  schema_version?: string;
+  generated_at?: string;
+  run_dir?: string;
+  backtest?: Record<string, unknown>;
+  reproducibility?: Record<string, unknown>;
+  data_sources?: string[];
+  metrics?: Record<string, unknown>;
+  artifacts?: Array<{ path: string; size_bytes: number; sha256: string }>;
+  warnings?: string[];
+  validation?: Record<string, unknown>;
+}
+
+export interface LLMUsageSummary {
+  provider: string;
+  model?: string;
+  totals: {
+    calls: number;
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+    cache_read_tokens?: number;
+    cache_write_tokens?: number;
+  };
+  metering_eligible?: boolean;
+}
+
+export interface RunData {
+  status: string;
+  run_id: string;
+  prompt?: string;
+  elapsed_seconds?: number;
+  run_directory?: string;
+  run_stage?: string;
+  run_context?: Record<string, unknown>;
+  reason?: string;
+  metrics?: Record<string, number>;
+  run_card?: RunCard;
+  validation?: ValidationData;
+  chart_symbols?: string[];
+  price_series?: Record<string, PriceBar[]>;
+  indicator_series?: Record<string, Record<string, IndicatorPoint[]>>;
+  trade_markers?: TradeMarker[];
+  equity_curve?: EquityPoint[];
+  trade_log?: Array<Record<string, string>>;
+  run_logs?: Array<{ source?: string; line_number?: number; message?: string }>;
+  llm_usage?: LLMUsageSummary;
+}
+
+const reportsUrl = (path = "") => `${httpBase()}/v1/reports${path}`;
+
+export async function listRuns(workspace?: string, limit = 100): Promise<RunListItem[]> {
+  const q = new URLSearchParams();
+  if (workspace) q.set("workspace", workspace);
+  q.set("limit", String(limit));
+  const res = await fetch(reportsUrl(`/runs?${q.toString()}`));
+  if (!res.ok) throw new Error("Unable to load reports.");
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+export async function getRun(
+  runId: string,
+  params: { chart_payload?: "summary"; chart_symbol?: string; workspace?: string } = {},
+): Promise<RunData> {
+  const q = new URLSearchParams();
+  if (params.chart_payload) q.set("chart_payload", params.chart_payload);
+  if (params.chart_symbol) q.set("chart_symbol", params.chart_symbol);
+  if (params.workspace) q.set("workspace", params.workspace);
+  const qs = q.toString();
+  const res = await fetch(reportsUrl(`/runs/${encodeURIComponent(runId)}${qs ? `?${qs}` : ""}`));
+  if (!res.ok) throw new Error(`Run ${runId} not found`);
+  return res.json();
+}
+
+export async function getRunCode(runId: string, workspace?: string): Promise<Record<string, string>> {
+  const q = workspace ? `?workspace=${encodeURIComponent(workspace)}` : "";
+  const res = await fetch(reportsUrl(`/runs/${encodeURIComponent(runId)}/code${q}`));
+  if (!res.ok) return {};
+  return res.json();
+}

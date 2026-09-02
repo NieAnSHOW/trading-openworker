@@ -139,14 +139,14 @@ interface Props {
   // Scheduled-band row click: open the Automations surface ON that automation (UX-023).
   onOpenAutomation: (id: string) => void;
   onOpenIntegrations: () => void;
-  onOpenAlphaZoo: () => void;
+  onOpenResearch: () => void;
   onOpenAudit: () => void;
   onOpenInbox: () => void;
   scheduledActive: boolean;
   integrationsActive: boolean;
   auditActive: boolean;
   inboxActive: boolean;
-  alphaZooActive: boolean;
+  researchActive: boolean;
   // Collapse controls (⌘B / hover-peek). `onCollapse` docks/undocks; `onPeekLeave` hides the
   // floating peek when the pointer leaves the panel.
   collapsed?: boolean;
@@ -1071,13 +1071,13 @@ export function Sidebar(props: Props) {
         <button
           className={
             "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-left hover:bg-chromeHover hover:text-ink " +
-            (props.alphaZooActive ? "text-ink bg-chromeHover" : "text-muted")
+            (props.researchActive ? "text-ink bg-chromeHover" : "text-muted")
           }
-          data-testid="nav-alphazoo"
-          onClick={props.onOpenAlphaZoo}
+          data-testid="nav-research"
+          onClick={props.onOpenResearch}
         >
-          <Icon name="book" size={15} className="shrink-0" />
-          <span className="flex-1">{t("sidebar.alpha_zoo")}</span>
+          <Icon name="barChart" size={15} className="shrink-0" />
+          <span className="flex-1">{t("sidebar.research")}</span>
         </button>
       </div>
 
