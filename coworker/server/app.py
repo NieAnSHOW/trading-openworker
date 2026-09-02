@@ -196,9 +196,7 @@ def create_app(manager: SessionManager) -> FastAPI:
     def _request_authenticated(request: Request) -> bool:
         provided = request.headers.get("x-openworker-token", "")
         return bool(
-            api_token
-            and provided
-            and secrets.compare_digest(provided, api_token)
+            api_token and provided and secrets.compare_digest(provided, api_token)
         )
 
     def _websocket_authenticated(ws: WebSocket) -> bool:
@@ -261,7 +259,10 @@ def create_app(manager: SessionManager) -> FastAPI:
 
         # `internal` tells the GUI it may show internal-build affordances (the
         # "Not in this release" group, the Gallery entry point).
-        return {"personas": manager.personas.list_all(), "internal": include_unshipped()}
+        return {
+            "personas": manager.personas.list_all(),
+            "internal": include_unshipped(),
+        }
 
     @app.get("/v1/inbox")
     def inbox(session_id: str = "", state: str = "") -> dict[str, Any]:
@@ -474,9 +475,7 @@ def create_app(manager: SessionManager) -> FastAPI:
                     data = base64.b64decode(str(body["zip_b64"]), validate=True)
                 except (ValueError, binascii.Error):
                     return {"ok": False, "error": "Invalid archive encoding."}
-                summaries = reg.install_from_zip(
-                    data, str(body.get("filename", ""))
-                )
+                summaries = reg.install_from_zip(data, str(body.get("filename", "")))
             elif body.get("gallery_slug"):
                 # Gallery install = fetch the manifest markdown from the cloud
                 # (sign-in required), verify its hash, then reuse the exact
@@ -636,6 +635,56 @@ def create_app(manager: SessionManager) -> FastAPI:
     def skills(workspace: str = "") -> dict[str, Any]:
         return {"skills": manager.list_skills(workspace or None)}
 
+    # -- Alpha Zoo (vendored Vibe-Trading factor engine; long jobs are poll-based) --
+    @app.get("/v1/alphazoo/health")
+    def alphazoo_health() -> dict[str, Any]:
+        from .. import alphazoo
+
+        return alphazoo.health()
+
+    @app.get("/v1/alphazoo/alphas")
+    def alphazoo_list(
+        zoo: str = "",
+        theme: str = "",
+        universe: str = "",
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        from .. import alphazoo
+
+        return alphazoo.list_alphas(
+            zoo=zoo or None, theme=theme or None, universe=universe or None, limit=limit
+        )
+
+    @app.get("/v1/alphazoo/alphas/{alpha_id}")
+    def alphazoo_detail(alpha_id: str) -> dict[str, Any]:
+        from .. import alphazoo
+
+        return alphazoo.get_alpha(alpha_id)
+
+    @app.post("/v1/alphazoo/bench")
+    async def alphazoo_bench(body: dict) -> dict[str, Any]:
+        from .. import alphazoo
+
+        return await alphazoo.start_bench(body or {})
+
+    @app.get("/v1/alphazoo/bench/{job_id}")
+    def alphazoo_bench_status(job_id: str) -> dict[str, Any]:
+        from .. import alphazoo
+
+        return alphazoo.bench_status(job_id)
+
+    @app.post("/v1/alphazoo/compare")
+    async def alphazoo_compare(body: dict) -> dict[str, Any]:
+        from .. import alphazoo
+
+        return await alphazoo.start_compare(body or {})
+
+    @app.get("/v1/alphazoo/compare/{job_id}")
+    def alphazoo_compare_status(job_id: str) -> dict[str, Any]:
+        from .. import alphazoo
+
+        return alphazoo.compare_status(job_id)
+
     @app.post("/v1/skills")
     def create_skill(body: dict) -> dict[str, Any]:
         return manager.create_skill(body or {})
@@ -655,7 +704,9 @@ def create_app(manager: SessionManager) -> FastAPI:
     @app.post("/v1/skills/{name}/reveal")
     def reveal_skill(name: str, body: dict) -> dict[str, Any]:
         # §6 "Show folder": open the skill's folder in the OS file manager (local machine).
-        return manager.reveal_skill(name, str((body or {}).get("workspace", "")) or None)
+        return manager.reveal_skill(
+            name, str((body or {}).get("workspace", "")) or None
+        )
 
     @app.post("/v1/skills/upload")
     def stage_skill_upload(body: dict) -> dict[str, Any]:
@@ -707,7 +758,9 @@ def create_app(manager: SessionManager) -> FastAPI:
     def save_session_as_project(session_id: str, body: dict) -> dict[str, Any]:
         # UX-029 "Save as project…": move the temporary folder somewhere real. The GUI
         # reconnects afterwards so the engine rebinds to the new path.
-        return manager.save_temp_as_project(session_id, str((body or {}).get("path", "")))
+        return manager.save_temp_as_project(
+            session_id, str((body or {}).get("path", ""))
+        )
 
     @app.post("/v1/workspaces/pick")
     async def pick_workspace() -> dict[str, Any]:
@@ -837,8 +890,10 @@ def create_app(manager: SessionManager) -> FastAPI:
         actor = _board_actor(request)
         if actor is None:
             return JSONResponse(
-                {"error": "board token required (Authorization: Bearer …) — mint"
-                          " one with `ocw board token` on the serving machine"},
+                {
+                    "error": "board token required (Authorization: Bearer …) — mint"
+                    " one with `ocw board token` on the serving machine"
+                },
                 status_code=401,
             )
         try:
@@ -994,9 +1049,7 @@ def create_app(manager: SessionManager) -> FastAPI:
                 return JSONResponse(
                     {"error": "data_b64 is not valid base64"}, status_code=400
                 )
-            ref = manager.attachment_store.put(
-                data, str(body.get("filename", ""))
-            )
+            ref = manager.attachment_store.put(data, str(body.get("filename", "")))
             filename = str(body.get("filename", ""))
             event = manager.team_store.attach_ref(
                 str(body.get("space", "")),
@@ -1044,9 +1097,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         return _board(
             request,
             lambda actor: {
-                "events": manager.team_store.feed_for(
-                    space, actor.id, limit=int(limit)
-                )
+                "events": manager.team_store.feed_for(space, actor.id, limit=int(limit))
             },
         )
 
@@ -1776,9 +1827,7 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     @app.post("/v1/connectors/slack/approval-owners/remove")
     def slack_approval_owner_remove(body: dict) -> dict[str, Any]:
-        return manager.set_slack_approval_owner(
-            str(body.get("user_id", "")), add=False
-        )
+        return manager.set_slack_approval_owner(str(body.get("user_id", "")), add=False)
 
     # -- audit / browser observability ------------------------------------------
     @app.get("/v1/audit")
@@ -1923,7 +1972,9 @@ def create_app(manager: SessionManager) -> FastAPI:
     def settings_set_auto_approve_shadow(body: dict) -> dict[str, Any]:
         # Shadow evaluation (Part 6 step 3): the reviewer records what it WOULD decide on
         # every approval card while the human still decides. Independent of the live flag.
-        return manager.set_auto_approve_shadow((body or {}).get("auto_approve_shadow", False))
+        return manager.set_auto_approve_shadow(
+            (body or {}).get("auto_approve_shadow", False)
+        )
 
     @app.post("/v1/settings/pdf")
     def settings_set_pdf(body: dict) -> dict[str, Any]:
@@ -2487,9 +2538,7 @@ def create_app(manager: SessionManager) -> FastAPI:
             # Keeping the claim outside prevents two back-to-back frames from both starting.
             try:
                 events = (
-                    engine.retry()
-                    if retry
-                    else engine.run(content, display=display)
+                    engine.retry() if retry else engine.run(content, display=display)
                 )
                 async for event in events:
                     # Broadcast to every socket viewing this session (this socket included — it's a
@@ -2538,7 +2587,9 @@ def create_app(manager: SessionManager) -> FastAPI:
             # or flush an in-progress assistant stream in the GUI.
             await ws.send_json({"type": "input_rejected", "data": {"error": reason}})
 
-        async def claim_turn(*, retry: bool = False, content=None, display=None) -> None:
+        async def claim_turn(
+            *, retry: bool = False, content=None, display=None
+        ) -> None:
             if not manager.try_mark_running(session_id):
                 await reject_input(
                     "This session is already running a turn. Wait for it to finish or stop it."
@@ -2561,7 +2612,9 @@ def create_app(manager: SessionManager) -> FastAPI:
                 ):
                     inbound_times.popleft()
                 if len(inbound_times) >= _WS_RATE_LIMIT_COUNT:
-                    await reject_input("Too many WebSocket messages; reconnect and try again.")
+                    await reject_input(
+                        "Too many WebSocket messages; reconnect and try again."
+                    )
                     await ws.close(code=1008)
                     return
                 inbound_times.append(now)
@@ -2571,7 +2624,9 @@ def create_app(manager: SessionManager) -> FastAPI:
                     continue
                 kind = message.get("type")
                 if not isinstance(kind, str):
-                    await reject_input("Invalid WebSocket message: missing string type.")
+                    await reject_input(
+                        "Invalid WebSocket message: missing string type."
+                    )
                     continue
                 if kind == "approval":
                     _resolve_pending(message.get("decision", "deny"))
@@ -2625,7 +2680,9 @@ def create_app(manager: SessionManager) -> FastAPI:
                     if not isinstance(name, str) or not name:
                         await reject_input("Invalid allow_anyway: missing tool name.")
                     elif arguments is not None and not isinstance(arguments, dict):
-                        await reject_input("Invalid allow_anyway: arguments must be an object.")
+                        await reject_input(
+                            "Invalid allow_anyway: arguments must be an object."
+                        )
                     else:
                         engine.approve_action_once(name, arguments or {})
                 elif kind == "interrupt":
@@ -2657,8 +2714,7 @@ def create_app(manager: SessionManager) -> FastAPI:
                             )
 
                             if new_mode is Mode.AUTO_APPROVE and not any(
-                                m.get("kind") == "mode_notice"
-                                for m in engine.messages
+                                m.get("kind") == "mode_notice" for m in engine.messages
                             ):
                                 engine._append_notice(
                                     "mode_notice",
@@ -2670,12 +2726,8 @@ def create_app(manager: SessionManager) -> FastAPI:
                                     "text": AUTO_APPROVE_NOTICE,
                                 }
                             else:
-                                label = MODE_LABELS.get(
-                                    new_mode.value, new_mode.value
-                                )
-                                engine._append_notice(
-                                    "mode_switch", f"{label} is on."
-                                )
+                                label = MODE_LABELS.get(new_mode.value, new_mode.value)
+                                engine._append_notice("mode_switch", f"{label} is on.")
                                 notice_data = {"text": f"{label} is on."}
                             # A mode switch with no accompanying message is bookkeeping,
                             # not activity (owner ruling 2026-08-24): the transcript
