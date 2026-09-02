@@ -445,6 +445,13 @@ def build_engine(
         )
     )
 
+    # Vibe-Trading data tools (vendored, read-only market data over public endpoints).
+    # classify() → READ: freely callable without an approval card; modules whose deps
+    # are missing (pandas / iwencai key) drop out at import, so no extra gate here.
+    from .tools.trading import trading_tools  # lazy: optional third-party deps inside
+
+    registry.register_all(trading_tools())
+
     # User-local risk overrides (mainly to relax MCP's conservative default). Empty store →
     # no-op; never written by persona loading (the no-self-grant rule).
     risk_overrides = RiskOverrideStore(state_dir() / "risk_overrides.json").resolver()
@@ -453,7 +460,9 @@ def build_engine(
         mode=mode,
         # `[]` is an explicit deny-by-default override, not a request to fall back to config.
         allowed_commands=(
-            allowed_commands if allowed_commands is not None else config.allowed_commands
+            allowed_commands
+            if allowed_commands is not None
+            else config.allowed_commands
         ),
         auto_allow_tools=set(config.auto_allow),
         allowed_domains=list(config.allowed_domains),
@@ -594,7 +603,11 @@ def build_engine(
     # to the user-global prefs store, which the server reads and passes here); None ⇒ take
     # the config.toml value. Both stores are user-global, so a repo still can't turn either
     # on regardless of which path set it.
-    live_on = auto_approve if auto_approve is not None else getattr(config, "auto_approve", False)
+    live_on = (
+        auto_approve
+        if auto_approve is not None
+        else getattr(config, "auto_approve", False)
+    )
     shadow_on = (
         auto_approve_shadow
         if auto_approve_shadow is not None

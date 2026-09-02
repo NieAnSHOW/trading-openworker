@@ -49,6 +49,10 @@ browser = ["playwright>=1.44"]
 # AWS Bedrock provider (lazy-imported; desktop builds bundle it, pip users opt in).
 bedrock = ["boto3>=1.34"]
 
+# Vendored Vibe-Trading market-data tools (coworker/tools/trading). Everything is
+# stdlib-http except a_stock_data, which returns pandas DataFrames.
+trading = ["pandas>=2"]
+
 [project.scripts]
 openworker = "coworker.cli:main"
 openworker-server = "coworker.server.run:main"
