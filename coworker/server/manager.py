@@ -82,6 +82,12 @@ from ..providers import (
     provider_descriptors,
     verify_provider_key,
 )
+from ..providers.registry import (
+    CUSTOM_PROVIDER_RE,
+    is_custom_provider,
+    register_custom_provider,
+    unregister_custom_provider,
+)
 from ..secrets import SecretStore, state_dir
 from ..sessions import SessionRecord
 from ..teams import Actor as TeamActor
@@ -266,6 +272,16 @@ class SessionManager:
         self._prefs = self._load_prefs()
         if self._prefs.get("default_model"):
             self.model = self._prefs["default_model"]
+        # Re-register user-defined providers (Settings ▸ Models ▸ Add provider) from prefs
+        # so their model prefixes route before any engine is built. Registry raises on a
+        # bad entry — skip it rather than block startup; Settings ▸ Models can fix it.
+        for _cp in self._prefs.get("custom_providers") or []:
+            try:
+                register_custom_provider(
+                    _cp.get("name", ""), _cp.get("title", ""), _cp.get("protocol", "")
+                )
+            except ValueError:
+                pass
         # Seed the PDF-fallback module global from prefs so engines see the user's
         # choice from the first turn (set_pdf_settings keeps it in sync after).
         from ..pdf_support import set_fallback_mode
@@ -2925,6 +2941,9 @@ class SessionManager:
                 "last_used_at": (self._prefs.get("provider_last_used") or {}).get(
                     d.name
                 ),
+                # User-defined provider (Settings ▸ Models ▸ Add provider) — the GUI offers
+                # "Delete provider" instead of just "Remove key".
+                "custom": is_custom_provider(d.name),
             }
             if d.auth == "oauth":
                 # Sign-in state instead of key state; the token values themselves
@@ -3073,6 +3092,63 @@ class SessionManager:
         d = get_descriptor(name)
         if d is None:
             return {"ok": False, "error": f"unknown provider: {name}"}
+        self.secrets.delete(f"provider:{name}")
+        self._refresh_provider(name)
+        return {"ok": True, "provider": name}
+
+    def add_custom_provider(
+        self, name: str, title: str, protocol: str, base_url: str
+    ) -> dict[str, Any]:
+        """Create a user-defined provider (Settings ▸ Models ▸ Add provider): an OpenAI- or
+        Anthropic-compatible endpoint. Identity (name/title/protocol) persists in prefs and
+        re-registers into the descriptor registry; base_url lands in the provider's secret
+        profile (the API key follows later through the normal provider form)."""
+        name = (name or "").strip()
+        if not CUSTOM_PROVIDER_RE.match(name):
+            return {
+                "ok": False,
+                "error": "id must be 1-32 chars: lowercase letters, digits, '-' or '_', starting with a letter",
+            }
+        if get_descriptor(name) is not None:
+            return {"ok": False, "error": f"provider already exists: {name}"}
+        protocol = (protocol or "").strip().lower()
+        if protocol not in ("openai", "anthropic"):
+            return {"ok": False, "error": "protocol must be 'openai' or 'anthropic'"}
+        base_url = (base_url or "").strip()
+        if not base_url.startswith(("http://", "https://")):
+            return {"ok": False, "error": "base_url must be an http(s) URL"}
+        entry = {
+            "name": name,
+            "title": (title or "").strip() or name,
+            "protocol": protocol,
+        }
+        custom = [
+            c
+            for c in (self._prefs.get("custom_providers") or [])
+            if c.get("name") != name
+        ]
+        custom.append(entry)
+        self._prefs["custom_providers"] = custom
+        self._save_prefs()
+        register_custom_provider(name, entry["title"], protocol)
+        profile = dict(self.secrets.get(f"provider:{name}") or {})
+        profile["base_url"] = base_url
+        self.secrets.put(f"provider:{name}", profile)
+        self._refresh_provider(name)
+        return {"ok": True, "provider": name}
+
+    def remove_custom_provider(self, name: str) -> dict[str, Any]:
+        """Delete a user-defined provider entirely: descriptor, prefs entry, and the stored
+        profile (key + base URL). Its models stay in the picker but lose their provider."""
+        if not is_custom_provider(name):
+            return {"ok": False, "error": f"not a custom provider: {name}"}
+        unregister_custom_provider(name)
+        self._prefs["custom_providers"] = [
+            c
+            for c in (self._prefs.get("custom_providers") or [])
+            if c.get("name") != name
+        ]
+        self._save_prefs()
         self.secrets.delete(f"provider:{name}")
         self._refresh_provider(name)
         return {"ok": True, "provider": name}
@@ -3344,10 +3420,16 @@ class SessionManager:
             "models": selectable,
             # Curated-matrix display names ({full id → "GLM-5.2 · via Together"}) so every
             # picker shows human labels; custom models absent here render their raw id.
-            "model_labels": model_labels(),
-            # {full id → context window in tokens}, verified matrix entries only —
-            # drives the composer's context-fill meter (absent id → meter hides).
-            "model_context_windows": model_context_windows(),
+            "model_labels": {**model_labels(), **self.model_label_overrides()},
+            "model_label_overrides": self.model_label_overrides(),
+            # {full id → context window in tokens} — verified matrix entries overridden by
+            # the user's per-model Settings values — drives the composer's context-fill
+            # meter (absent id → meter hides).
+            "model_context_windows": {
+                **model_context_windows(),
+                **self.context_window_overrides(),
+            },
+            "context_window_overrides": self.context_window_overrides(),
             "has_key": env_key or stored,
             # Provider-agnostic "can this default model actually run?" — true when the default
             # model's provider is configured (any provider, not just OpenAI). Drives the GUI's
@@ -3508,7 +3590,75 @@ class SessionManager:
             ),
             # "" → the session's own model (engine falls back to self.model).
             "model": str(self._prefs.get("compaction_model") or ""),
+            # {model id → context window in tokens}: the user's per-model window overrides
+            # (Settings ▸ Context). The engine picks its own model's entry; unknown keys are
+            # inert. Feeds the compaction trigger and (via get_settings) the fill meter.
+            "context_window_overrides": self.context_window_overrides(),
         }
+
+    def context_window_overrides(self) -> dict[str, int]:
+        """User-set context windows per model id (prefs), sanitized to ints."""
+        raw = self._prefs.get("context_window_overrides")
+        out: dict[str, int] = {}
+        if isinstance(raw, dict):
+            for k, v in raw.items():
+                try:
+                    out[str(k)] = int(v)
+                except (TypeError, ValueError):
+                    continue
+        return out
+
+    def set_context_window_override(self, model: str, tokens: Any) -> dict[str, Any]:
+        """Set (or, with tokens None/0/"", clear) a model's context-window override.
+        Applies live: engines read compaction_settings() per check; get_settings() merges
+        overrides into model_context_windows for the composer's fill meter."""
+        model = (model or "").strip()
+        if not model:
+            return {"ok": False, "error": "model required"}
+        ovr = dict(self._prefs.get("context_window_overrides") or {})
+        if tokens is None or tokens == "" or tokens == 0 or tokens == "0":
+            ovr.pop(model, None)
+        else:
+            try:
+                n = int(tokens)
+            except (TypeError, ValueError):
+                return {"ok": False, "error": "tokens must be a number"}
+            if not 1_000 <= n <= 10_000_000:
+                return {
+                    "ok": False,
+                    "error": "tokens must be between 1,000 and 10,000,000",
+                }
+            ovr[model] = n
+        self._prefs["context_window_overrides"] = ovr
+        self._save_prefs()
+        return {"ok": True, "model": model, "context_window": ovr.get(model)}
+
+    def model_label_overrides(self) -> dict[str, str]:
+        """User-set display names per model id (prefs), trimmed non-empty."""
+        raw = self._prefs.get("model_label_overrides")
+        out: dict[str, str] = {}
+        if isinstance(raw, dict):
+            for k, v in raw.items():
+                if isinstance(v, str) and v.strip():
+                    out[str(k)] = v.strip()
+        return out
+
+    def set_model_label(self, model: str, label: str) -> dict[str, Any]:
+        """Set (or, with an empty label, clear) a model's display-name override.
+        get_settings() merges these over the matrix labels, so every picker and checklist
+        shows the user's name; the raw id stays the stable key."""
+        model = (model or "").strip()
+        if not model:
+            return {"ok": False, "error": "model required"}
+        label = (label or "").strip()
+        ovr = dict(self._prefs.get("model_label_overrides") or {})
+        if label:
+            ovr[model] = label
+        else:
+            ovr.pop(model, None)
+        self._prefs["model_label_overrides"] = ovr
+        self._save_prefs()
+        return {"ok": True, "model": model, "label": label}
 
     def compaction_settings_payload(self) -> dict[str, Any]:
         """The same knobs under REST-facing names (prefixed to keep /v1/settings flat)."""

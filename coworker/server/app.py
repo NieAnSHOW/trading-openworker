@@ -189,6 +189,7 @@ def create_app(manager: SessionManager) -> FastAPI:
     tokenless_paths = {
         "/v1/health",
         "/auth/callback",
+        "/auth/cool/callback",
         "/mcp/oauth/callback",
         "/oauth/callback",
     }
@@ -1577,8 +1578,13 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     @app.get("/v1/cloud/status")
     def cloud_status() -> dict[str, Any]:
-        from .. import cloud
+        from .. import cloud, coolauth
+        from ..config import load_config
 
+        if coolauth.enabled(load_config()):
+            # Cool-Admin mode: no telemetry pipeline exists — the field only
+            # feeds the Settings toggle, which is inert here anyway.
+            return {**coolauth.status(manager.secrets), "telemetry_enabled": True}
         return {
             **cloud.status(manager.secrets),
             "telemetry_enabled": cloud.telemetry_enabled(manager.secrets),
@@ -1597,20 +1603,29 @@ def create_app(manager: SessionManager) -> FastAPI:
     @app.post("/v1/cloud/login")
     def cloud_login() -> dict[str, Any]:
         """Start browser sign-in. The sidecar opens the system browser itself
-        (works identically under Tauri and plain-browser dev)."""
+        (works identically under Tauri and plain-browser dev). With
+        cool_admin_base_url configured this becomes the Cool-Admin authorize
+        page; otherwise the stock OpenWorker cloud broker flow."""
         import webbrowser
 
-        from .. import cloud
+        from .. import cloud, coolauth
         from ..config import load_config
 
-        out = cloud.begin_login(load_config())
-        webbrowser.open(out["authorize_url"])
-        return {"ok": True, "authorize_url": out["authorize_url"]}
+        cfg = load_config()
+        if coolauth.enabled(cfg):
+            url = coolauth.begin_login(cfg)["authorize_url"]
+        else:
+            url = cloud.begin_login(cfg)["authorize_url"]
+        webbrowser.open(url)
+        return {"ok": True, "authorize_url": url}
 
     @app.post("/v1/cloud/logout")
     def cloud_logout() -> dict[str, Any]:
-        from .. import cloud
+        from .. import cloud, coolauth
+        from ..config import load_config
 
+        if coolauth.enabled(load_config()):
+            return coolauth.logout(manager.secrets)
         return cloud.logout(manager.secrets)
 
     @app.get("/auth/callback")
@@ -1665,6 +1680,70 @@ def create_app(manager: SessionManager) -> FastAPI:
                 "You're signed in to OpenWorker Cloud. "
                 "You can close this tab and return to OpenWorker.",
             )
+        )
+
+    @app.post("/auth/cool/callback")
+    async def cool_auth_callback(request: Request):
+        """Loopback landing for the Cool-Admin authorize page: it logs the user
+        in with the mobile-app endpoints and form-POSTs the JWT pair here —
+        form-POST, not a redirect, so the token never lands in browser history.
+        The state check ties the POST to a login this sidecar actually started."""
+        from fastapi.responses import HTMLResponse
+
+        from .. import coolauth
+        from ..config import load_config
+
+        failed = "登录失败，请从 OpenWorker 重新发起登录。"
+        try:
+            form = {k: str(v) for k, v in (await request.form()).items()}
+        except Exception:
+            form = {}
+        if not coolauth.consume_state(form.get("state", "")):
+            return HTMLResponse(
+                _browser_page(
+                    "登录失败", failed, ok=False, error="invalid or expired state"
+                ),
+                status_code=400,
+            )
+        token = form.get("token", "")
+        if not token:
+            return HTMLResponse(
+                _browser_page("登录失败", failed, ok=False, error="missing token"),
+                status_code=400,
+            )
+
+        def _int(key: str) -> int:
+            try:
+                return int(form.get(key, "") or 0)
+            except ValueError:
+                return 0
+
+        cfg = load_config()
+        await asyncio.to_thread(
+            lambda: coolauth.store_session(
+                manager.secrets,
+                token=token,
+                refresh_token=form.get("refreshToken", ""),
+                expire=_int("expire"),
+                refresh_expire=_int("refreshExpire"),
+                account=form.get("account", ""),
+            )
+        )
+
+        # Credentials sync in the background: the browser's "signed in" page and
+        # the GUI's status flip must not wait on a sealed round trip to the
+        # member API. Failure keeps the sign-in; Settings ▸ Models can re-sync.
+        async def _sync_credentials() -> None:
+            try:
+                await asyncio.to_thread(
+                    lambda: coolauth.sync_credentials(manager, manager.secrets, cfg)
+                )
+            except Exception:
+                pass
+
+        asyncio.get_running_loop().create_task(_sync_credentials())
+        return HTMLResponse(
+            _browser_page("登录成功", "已登录，请回到 OpenWorker 继续使用。")
         )
 
     @app.post("/v1/connectors/{name}/connect-managed")
@@ -1937,6 +2016,22 @@ def create_app(manager: SessionManager) -> FastAPI:
     def providers_remove(name: str) -> dict[str, Any]:
         return manager.remove_provider(name)
 
+    @app.post("/v1/providers/custom")
+    def providers_custom_add(body: dict) -> dict[str, Any]:
+        # User-defined OpenAI/Anthropic-compatible provider (Settings ▸ Models ▸ Add
+        # provider). Identity in prefs; base_url in the profile; key via POST /v1/providers.
+        b = body or {}
+        return manager.add_custom_provider(
+            b.get("name", ""),
+            b.get("title", ""),
+            b.get("protocol", ""),
+            b.get("base_url", ""),
+        )
+
+    @app.delete("/v1/providers/custom/{name}")
+    def providers_custom_remove(name: str) -> dict[str, Any]:
+        return manager.remove_custom_provider(name)
+
     @app.post("/v1/providers/verify")
     async def providers_verify(body: dict) -> dict[str, Any]:
         # Live read-only credential check (sync httpx) — run off the event loop.
@@ -2040,6 +2135,20 @@ def create_app(manager: SessionManager) -> FastAPI:
             max_pages=b.get("pdf_max_pages"),
             max_mb=b.get("pdf_max_mb"),
         )
+
+    @app.post("/v1/settings/context-windows")
+    def settings_set_context_window(body: dict) -> dict[str, Any]:
+        # Per-model context-window override (Settings ▸ Models, on the model row).
+        # tokens 0/null clears.
+        b = body or {}
+        return manager.set_context_window_override(b.get("model", ""), b.get("tokens"))
+
+    @app.post("/v1/settings/model-labels")
+    def settings_set_model_label(body: dict) -> dict[str, Any]:
+        # Per-model display-name override (Settings ▸ Models, on the model row).
+        # Empty label clears back to the matrix name / raw id.
+        b = body or {}
+        return manager.set_model_label(b.get("model", ""), b.get("label", ""))
 
     @app.post("/v1/settings/compaction")
     def settings_set_compaction(body: dict) -> dict[str, Any]:

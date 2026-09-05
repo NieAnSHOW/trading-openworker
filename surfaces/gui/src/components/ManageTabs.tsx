@@ -8,6 +8,7 @@ import {
   disallowUser,
   getSettings,
   getSubscriptions,
+  removeCustomProvider,
   removeModel,
   resolveUnauthorized,
   unsubscribeChannel,
@@ -86,7 +87,28 @@ export function ModelsTab() {
         ps={ps}
         tp="set"
         footer={
-          ps.credentialed ? (
+          info?.custom ? (
+            <button
+              className="text-[13px] text-danger/80 hover:text-danger hover:underline underline-offset-2"
+              data-testid="set-delete-provider"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    t("manage.delete_provider_confirm", { title: info?.title || "" }),
+                  )
+                )
+                  removeCustomProvider(ps.sel || "").then((r) => {
+                    if (r.ok) {
+                      ps.backToGallery();
+                      ps.refreshProviders();
+                      refreshSettings();
+                    }
+                  });
+              }}
+            >
+              {t("manage.delete_provider")}
+            </button>
+          ) : ps.credentialed ? (
             <button
               className="text-[13px] text-danger/80 hover:text-danger hover:underline underline-offset-2"
               data-testid="set-remove-key"
@@ -119,7 +141,10 @@ export function ModelsTab() {
             curated={settings.models}
             defaultModel={settings.model}
             labels={settings.model_labels}
-            onChanged={(next) => setSettings((s) => (s ? { ...s, models: next.models, model: next.model } : s))}
+            contextWindows={settings.model_context_windows}
+            contextOverrides={settings.context_window_overrides}
+            labelOverrides={settings.model_label_overrides}
+            onChanged={(next) => setSettings((s) => (s ? { ...s, ...next } : s))}
           />
         </div>
       ) : (

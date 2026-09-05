@@ -370,7 +370,9 @@ class TurnEngine:
             return message.get("kind") == "error"
         return False
 
-    def _append_notice(self, kind: str, text: Optional[str] = None, **fields: Any) -> None:
+    def _append_notice(
+        self, kind: str, text: Optional[str] = None, **fields: Any
+    ) -> None:
         """Persist a turn-ending marker (error/interrupted) as a display-only `notice`
         message: it survives reload like the transcript does, but `_outbound_messages`
         drops the role so no provider ever sees it. Extra `fields` (e.g. the failing
@@ -550,7 +552,9 @@ class TurnEngine:
                 # the user just sees narration trailing off into stray tags. Fail loudly
                 # instead, on the error path so the GUI offers Retry — this is drift, not a
                 # deterministic failure, so retrying the same model usually works.
-                if looks_like_unparsed_tool_call(turn.text, self.registry.schemas() or None):
+                if looks_like_unparsed_tool_call(
+                    turn.text, self.registry.schemas() or None
+                ):
                     message = (
                         f"{self.model} replied with a tool call this endpoint couldn't parse, "
                         "so the turn was stopped rather than answered from a partial call. "
@@ -584,10 +588,17 @@ class TurnEngine:
     # -- auto-compaction (OPE-27) ------------------------------------------------
     def _compaction_config(self) -> dict[str, Any]:
         cfg = dict(self.compaction_settings() or {}) if self.compaction_settings else {}
+        # Per-model window overrides (Settings ▸ Context) win over the matrix entry.
+        overrides = cfg.pop("context_window_overrides", None) or {}
         if not cfg.get("context_window"):
             from .providers.matrix import model_context_windows
 
             cfg["context_window"] = model_context_windows().get(self.model)
+        if self.model in overrides:
+            try:
+                cfg["context_window"] = int(overrides[self.model])
+            except (TypeError, ValueError):
+                pass
         cfg.setdefault("threshold_pct", _compaction.DEFAULT_THRESHOLD_PCT)
         cfg.setdefault("cap_tokens", _compaction.DEFAULT_CAP_TOKENS)
         return cfg
@@ -642,7 +653,12 @@ class TurnEngine:
                 break
             except Exception:
                 failed = True
-        if failed and self.question_asker is not None and self.is_attended and self.is_attended():
+        if (
+            failed
+            and self.question_asker is not None
+            and self.is_attended
+            and self.is_attended()
+        ):
             while True:
                 answer = await self._interruptible(
                     self.question_asker(
@@ -1015,14 +1031,18 @@ class TurnEngine:
         )
 
     @staticmethod
-    def _action_key(tool_name: str, arguments: dict[str, Any] | None) -> tuple[str, str]:
+    def _action_key(
+        tool_name: str, arguments: dict[str, Any] | None
+    ) -> tuple[str, str]:
         try:
             canon = json.dumps(arguments or {}, sort_keys=True, ensure_ascii=False)
         except (TypeError, ValueError):
             canon = str(arguments)
         return (tool_name, canon)
 
-    def approve_action_once(self, tool_name: str, arguments: dict[str, Any] | None) -> None:
+    def approve_action_once(
+        self, tool_name: str, arguments: dict[str, Any] | None
+    ) -> None:
         """Register a one-shot human approval for this EXACT action (§8.4 "Allow anyway").
 
         Called by the server when the user clicks the deny card — a human decision made
@@ -1147,15 +1167,23 @@ class TurnEngine:
         if allowed and decision.reason == "full access":
             self._approval_origins[tool_call.id] = {"origin": "bypass"}
 
-        if not allowed and decision.needs_user and self._consume_allow_anyway(tool_call):
+        if (
+            not allowed
+            and decision.needs_user
+            and self._consume_allow_anyway(tool_call)
+        ):
             # §8.4 "Allow anyway": the human already approved this exact action from the
             # deny card. One-shot — consumed above; a different action never matches.
             allowed = True
             reason = "approved by user (allow anyway)"
-            self._audit(tool_call, stage="auto_allowed", status="allowed", reason=reason)
+            self._audit(
+                tool_call, stage="auto_allowed", status="allowed", reason=reason
+            )
 
         consulted_live = False
-        unsure_note = ""  # the reviewer's hesitation, when an unsure verdict raised the card
+        unsure_note = (
+            ""  # the reviewer's hesitation, when an unsure verdict raised the card
+        )
         if (
             not allowed
             and decision.needs_user
@@ -1183,7 +1211,8 @@ class TurnEngine:
                 allowed = True
                 self._reviewer_denials = 0  # streak semantics: any non-deny resets
                 self._approval_origins[tool_call.id] = {
-                    "origin": "reviewer", "note": verdict.reason
+                    "origin": "reviewer",
+                    "note": verdict.reason,
                 }
                 reason = f"allowed by reviewer: {verdict.reason}"
             elif verdict.verdict == "deny":
@@ -1206,7 +1235,11 @@ class TurnEngine:
                         "reason": "blocked by the safety reviewer",
                         "reviewer_reason": verdict.reason,
                         "allow_anyway": True,
-                        **({"reviewer_paused": _REVIEWER_PAUSED_TEXT} if tripped else {}),
+                        **(
+                            {"reviewer_paused": _REVIEWER_PAUSED_TEXT}
+                            if tripped
+                            else {}
+                        ),
                     },
                 )
                 deny_msg = _tool_error_message(tool_call, AGENT_DENY_MESSAGE)
@@ -1291,7 +1324,9 @@ class TurnEngine:
             if outcome is ApprovalOutcome.DENY:
                 allowed, reason = (
                     False,
-                    "interrupted by user" if self._cancel.is_set() else "denied by user",
+                    "interrupted by user"
+                    if self._cancel.is_set()
+                    else "denied by user",
                 )
                 self._approval_origins[tool_call.id] = {
                     "origin": "user",
@@ -1343,7 +1378,11 @@ class TurnEngine:
                 err_msg["_display"] = {
                     "approval_origin": origin.get("origin", ""),
                     **({"approval_note": origin["note"]} if origin.get("note") else {}),
-                    **({"approval_grant": origin["grant"]} if origin.get("grant") else {}),
+                    **(
+                        {"approval_grant": origin["grant"]}
+                        if origin.get("grant")
+                        else {}
+                    ),
                 }
             self.messages.append(err_msg)
             yield Event(
@@ -1441,8 +1480,16 @@ class TurnEngine:
                 **(
                     {
                         "approval_origin": origin.get("origin", ""),
-                        **({"approval_note": origin["note"]} if origin.get("note") else {}),
-                        **({"approval_grant": origin["grant"]} if origin.get("grant") else {}),
+                        **(
+                            {"approval_note": origin["note"]}
+                            if origin.get("note")
+                            else {}
+                        ),
+                        **(
+                            {"approval_grant": origin["grant"]}
+                            if origin.get("grant")
+                            else {}
+                        ),
                     }
                     if origin
                     else {}
@@ -1680,9 +1727,7 @@ class TurnEngine:
             catalog = ", ".join(sorted(_toolchain.MANAGED))
             result = {
                 "installed": False,
-                "error": (
-                    f"'{name}' is not in the pinned tool catalog ({catalog})."
-                ),
+                "error": (f"'{name}' is not in the pinned tool catalog ({catalog})."),
                 "guidance": (
                     "Install it yourself with the shell (brew/pip/…, subject to the "
                     "normal command approval), or continue without it and say in your "
@@ -1857,9 +1902,7 @@ class TurnEngine:
             },
         )
 
-    def _note_ask_replies(
-        self, result: dict[str, Any], question: str = ""
-    ) -> None:
+    def _note_ask_replies(self, result: dict[str, Any], question: str = "") -> None:
         """Record the user's ask_user answer(s) for the reviewer's history (§8.2),
         together with the agent's question — shown to the judge explicitly framed as
         agent-authored data (same Rule-3 discipline as tool arguments), so a structured
@@ -2009,7 +2052,9 @@ class TurnEngine:
         return out
 
 
-def _assistant_message(turn: AssistantTurn, model: Optional[str] = None) -> dict[str, Any]:
+def _assistant_message(
+    turn: AssistantTurn, model: Optional[str] = None
+) -> dict[str, Any]:
     message: dict[str, Any] = {
         "role": "assistant",
         "content": turn.text or "",

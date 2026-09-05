@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
+  addCustomProvider,
   codexAuthStatus,
   codexSignin,
   codexSignout,
@@ -402,25 +403,128 @@ export function ProviderCards({
   gridClass?: string;
   lastUsed?: boolean;
 }) {
+  const { t } = useTranslation();
   const card =
     "flex items-center gap-2.5 rounded-xl border border-line bg-panel px-3 py-2.5 text-left hover:border-lineStrong transition-colors";
+  // "Add provider" (Settings + onboarding gallery): an OpenAI- or Anthropic-compatible
+  // endpoint with the user's own base URL. Creation flips straight into the provider's
+  // key form, so pasting the key + Test is the very next step.
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState<{ name: string; title: string; protocol: "openai" | "anthropic"; base_url: string }>({
+    name: "", title: "", protocol: "openai", base_url: "",
+  });
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const BTN_ACCENT = "text-[13px] px-3 py-1.5 rounded-lg bg-accent text-white shrink-0 disabled:opacity-50";
+  const fieldLbl = "block text-[12px] text-muted mb-1";
+  const fieldInput =
+    "w-full px-3 py-2 rounded-lg border border-line bg-paper text-[13px] outline-none focus:border-accent";
+  const create = async () => {
+    const name = draft.name.trim();
+    setBusy(true);
+    setErr(null);
+    const res = await addCustomProvider(name, draft.title.trim(), draft.protocol, draft.base_url.trim()).catch(
+      () => ({ ok: false, error: t("provider.custom_failed") }),
+    );
+    setBusy(false);
+    if (!res.ok) {
+      setErr(res.error || t("provider.custom_failed"));
+      return;
+    }
+    setAdding(false);
+    setDraft({ name: "", title: "", protocol: "openai", base_url: "" });
+    await ps.refreshProviders();
+    ps.openProvider(name);
+  };
   return (
-    <div className={gridClass}>
-      {ps.ordered.map((p) => (
+    <div>
+      <div className={gridClass}>
+        {ps.ordered.map((p) => (
+          <button
+            key={p.name}
+            className={card}
+            data-testid={`${tp}-provider-${p.name}`}
+            onClick={() => ps.openProvider(p.name)}
+          >
+            <ProviderMark name={p.name} title={p.title} />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[13px] font-semibold leading-tight truncate">{p.title}</span>
+              {ps.statusFor(p, { lastUsed })}
+            </span>
+            <span className="text-faint text-[14px]">›</span>
+          </button>
+        ))}
+      </div>
+      {adding ? (
+        <div className="mt-2.5 rounded-xl border border-line bg-panel p-3.5" data-testid={`${tp}-custom-form`}>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className={fieldLbl}>{t("provider.custom_id_label")}</span>
+              <input
+                className={fieldInput}
+                value={draft.name}
+                placeholder="my-gateway"
+                data-testid={`${tp}-custom-name`}
+                onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+              />
+            </label>
+            <label className="block">
+              <span className={fieldLbl}>{t("provider.custom_title_label")}</span>
+              <input
+                className={fieldInput}
+                value={draft.title}
+                placeholder={t("provider.custom_title_placeholder")}
+                onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+              />
+            </label>
+            <label className="block">
+              <span className={fieldLbl}>{t("provider.custom_protocol_label")}</span>
+              <select
+                className={fieldInput}
+                value={draft.protocol}
+                data-testid={`${tp}-custom-protocol`}
+                onChange={(e) => setDraft((d) => ({ ...d, protocol: e.target.value as "openai" | "anthropic" }))}
+              >
+                <option value="openai">{t("provider.custom_protocol_openai")}</option>
+                <option value="anthropic">{t("provider.custom_protocol_anthropic")}</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className={fieldLbl}>{t("provider.custom_base_label")}</span>
+              <input
+                className={fieldInput}
+                value={draft.base_url}
+                placeholder={draft.protocol === "anthropic" ? "https://gw.example.com" : "https://gw.example.com/v1"}
+                data-testid={`${tp}-custom-base`}
+                onChange={(e) => setDraft((d) => ({ ...d, base_url: e.target.value }))}
+              />
+            </label>
+          </div>
+          <p className="text-[12px] text-faint mt-2">{t("provider.custom_help")}</p>
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              className={BTN_ACCENT}
+              disabled={busy || !draft.name.trim() || !draft.base_url.trim()}
+              data-testid={`${tp}-custom-create`}
+              onClick={() => void create()}
+            >
+              {t("provider.custom_create")}
+            </button>
+            <button className="text-[13px] text-muted hover:text-ink" onClick={() => setAdding(false)}>
+              {t("provider.custom_cancel")}
+            </button>
+          </div>
+          {err && <p className="text-[12px] text-warnInk mt-2">{err}</p>}
+        </div>
+      ) : (
         <button
-          key={p.name}
-          className={card}
-          data-testid={`${tp}-provider-${p.name}`}
-          onClick={() => ps.openProvider(p.name)}
+          className="mt-2.5 w-full rounded-xl border border-dashed border-line px-3 py-2.5 text-[13px] text-muted hover:text-ink hover:border-lineStrong"
+          data-testid={`${tp}-custom-add`}
+          onClick={() => setAdding(true)}
         >
-          <ProviderMark name={p.name} title={p.title} />
-          <span className="min-w-0 flex-1">
-            <span className="block text-[13px] font-semibold leading-tight truncate">{p.title}</span>
-            {ps.statusFor(p, { lastUsed })}
-          </span>
-          <span className="text-faint text-[14px]">›</span>
+          + {t("provider.custom_add")}
         </button>
-      ))}
+      )}
     </div>
   );
 }

@@ -18,6 +18,7 @@ MaaS endpoint), and `ollama` (local, OpenAI-compatible `/v1`).
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
@@ -88,8 +89,10 @@ class ProviderDescriptor:
     blurb: str = ""
     # "oauth" → no key form at all: the provider is configured by a browser sign-in
     # (tokens in its `provider:<name>` profile) and the GUI renders connect/sign-out
-    # instead of fields. None → the usual key/field form.
     auth: Optional[str] = None
+    # Custom (user-defined) providers only: wire protocol of the endpoint, "openai" or
+    # "anthropic". Drives the client builder and the credential probe; None for built-ins.
+    protocol: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -100,6 +103,7 @@ class ProviderDescriptor:
             "recommended_model": self.recommended_model,
             "blurb": self.blurb,
             "auth": self.auth,
+            "protocol": self.protocol,
         }
 
 
@@ -691,9 +695,90 @@ DESCRIPTORS: list[ProviderDescriptor] = [
 
 _BY_NAME = {d.name: d for d in DESCRIPTORS}
 
+# -- custom (user-defined) providers ------------------------------------------
+# Settings ▸ Models ▸ "Add provider": an OpenAI- or Anthropic-compatible endpoint with
+# the user's own base URL + key. The SessionManager registers one descriptor per entry
+# (persisted in its prefs) at startup and on every add/remove; the lookups below consult
+# them, so model-prefix routing (`mygw:gpt-x`) works with no further wiring.
+_CUSTOM: dict[str, ProviderDescriptor] = {}
+
+# Slug id: doubles as the model prefix (`<name>:model`) and the SecretStore profile key.
+CUSTOM_PROVIDER_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
+
+
+def _custom_builder(title: str, protocol: str):
+    def build(profile: dict[str, Any], secrets: Any) -> ProviderClient:
+        profile = profile or {}
+        key = (profile.get("api_key") or "").strip()
+        base = (profile.get("base_url") or "").strip() or None
+        if not key:
+            raise RuntimeError(
+                f"No API key configured for {title} — add it in Settings ▸ Models."
+            )
+        # Key comes only from the provider's own profile — never the OpenAI/Anthropic
+        # env or SecretStore fallback, so one vendor's key can't leak to another's endpoint.
+        if protocol == "anthropic":
+            return AnthropicProvider(api_key=key, base_url=base)
+        return OpenAIProvider(api_key=key, base_url=base)
+
+    return build
+
+
+def register_custom_provider(
+    name: str, title: str, protocol: str
+) -> ProviderDescriptor:
+    """Register (or replace) a user-defined provider descriptor. Raises ValueError on a
+    bad id or protocol — callers validate user input and surface the message."""
+    name = (name or "").strip()
+    if not CUSTOM_PROVIDER_RE.match(name):
+        raise ValueError(
+            "provider id must be 1-32 chars: lowercase letters, digits, '-' or '_', "
+            "starting with a letter"
+        )
+    if name in _BY_NAME:
+        raise ValueError(f"provider already exists: {name}")
+    protocol = (protocol or "").strip().lower()
+    if protocol not in ("openai", "anthropic"):
+        raise ValueError("protocol must be 'openai' or 'anthropic'")
+    d = ProviderDescriptor(
+        name=name,
+        title=(title or "").strip() or name,
+        needs_key=True,
+        fields=[
+            ProviderField(
+                key="base_url",
+                label="Base URL",
+                help=(
+                    "Anthropic protocol: server root, e.g. https://gw.example.com"
+                    if protocol == "anthropic"
+                    else "OpenAI protocol: e.g. https://gw.example.com/v1"
+                ),
+                placeholder="https://…",
+            ),
+            ProviderField(key="api_key", label="API Key", secret=True),
+        ],
+        build=_custom_builder((title or "").strip() or name, protocol),
+        blurb=(
+            "Custom Anthropic-compatible endpoint"
+            if protocol == "anthropic"
+            else "Custom OpenAI-compatible endpoint"
+        ),
+        protocol=protocol,
+    )
+    _CUSTOM[name] = d
+    return d
+
+
+def unregister_custom_provider(name: str) -> None:
+    _CUSTOM.pop(name, None)
+
+
+def is_custom_provider(name: str) -> bool:
+    return name in _CUSTOM
+
 
 def provider_descriptors() -> list[ProviderDescriptor]:
-    return list(DESCRIPTORS)
+    return list(DESCRIPTORS) + list(_CUSTOM.values())
 
 
 def provider_names() -> list[str]:
@@ -701,14 +786,14 @@ def provider_names() -> list[str]:
 
 
 def get_descriptor(name: str) -> Optional[ProviderDescriptor]:
-    return _BY_NAME.get(name)
+    return _BY_NAME.get(name) or _CUSTOM.get(name)
 
 
 def build_provider_client(
     name: str, profile: dict[str, Any], secrets: Any
 ) -> ProviderClient:
     """Build a `ProviderClient` for `name` from its stored profile. Unknown → OpenAI default."""
-    descriptor = _BY_NAME.get(name) or _BY_NAME["openai"]
+    descriptor = _BY_NAME.get(name) or _CUSTOM.get(name) or _BY_NAME["openai"]
     return descriptor.build(profile or {}, secrets)
 
 
@@ -828,7 +913,10 @@ def _verify_bedrock(fields: dict[str, Any], timeout: float) -> dict[str, Any]:
                     ),
                 }
             if code == "ExpiredTokenException":
-                return {"ok": False, "error": "The credentials have expired — generate a new key."}
+                return {
+                    "ok": False,
+                    "error": "The credentials have expired — generate a new key.",
+                }
             return {"ok": False, "error": f"AWS Bedrock returned {code}."}
         return {"ok": False, "error": f"Couldn't reach AWS Bedrock ({kind})."}
     return {"ok": True}
@@ -851,7 +939,9 @@ def _verify_vertex(fields: dict[str, Any], timeout: float) -> dict[str, Any]:
     project = (fields.get("project") or "").strip()
     location = (fields.get("location") or "").strip()
     method = (fields.get("auth_method") or "").strip() or (
-        "service_account" if (fields.get("service_account_json") or "").strip() else "adc"
+        "service_account"
+        if (fields.get("service_account_json") or "").strip()
+        else "adc"
     )
     if method == "api_key":
         key = (fields.get("vertex_api_key") or "").strip()
@@ -876,7 +966,10 @@ def _verify_vertex(fields: dict[str, Any], timeout: float) -> dict[str, Any]:
         if resp.status_code in (401, 403):
             return {"ok": False, "error": "Google rejected the API key."}
         return {"ok": False, "error": f"Vertex AI returned HTTP {resp.status_code}."}
-    if method == "service_account" and not (fields.get("service_account_json") or "").strip():
+    if (
+        method == "service_account"
+        and not (fields.get("service_account_json") or "").strip()
+    ):
         return {"ok": False, "error": "Paste a service-account JSON to test."}
     try:
         creds = None
@@ -914,7 +1007,10 @@ def _verify_vertex(fields: dict[str, Any], timeout: float) -> dict[str, Any]:
             timeout=timeout,
         )
     except Exception as exc:
-        return {"ok": False, "error": f"Couldn't reach Vertex AI ({exc.__class__.__name__})."}
+        return {
+            "ok": False,
+            "error": f"Couldn't reach Vertex AI ({exc.__class__.__name__}).",
+        }
     if resp.status_code < 300:
         return {"ok": True}
     if resp.status_code in (401, 403):
@@ -944,7 +1040,7 @@ def verify_provider_key(
     """
     import httpx
 
-    d = _BY_NAME.get(name) or _BY_NAME["openai"]
+    d = _BY_NAME.get(name) or _CUSTOM.get(name) or _BY_NAME["openai"]
     key = (api_key or "").strip()
     if d.auth == "oauth":
         # OAuth providers verify from their stored tokens (needs the SecretStore),
@@ -954,6 +1050,39 @@ def verify_provider_key(
         return _verify_bedrock(fields or {}, timeout)
     if name == "vertex":
         return _verify_vertex(fields or {}, timeout)
+    if d.protocol:
+        # Custom provider: probe ITS endpoint with its protocol's auth style. Base URL is
+        # required up front — a missing base would otherwise probe api.openai.com with the
+        # user's gateway key, which reads as a false "Invalid API key".
+        base = (base_url or "").strip().rstrip("/")
+        if not base:
+            return {"ok": False, "error": "Enter the Base URL to test."}
+        try:
+            if d.protocol == "anthropic":
+                # SDK appends /v1/messages to the base; the models list lives at /v1/models.
+                resp = httpx.get(
+                    base + "/v1/models",
+                    headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
+                    timeout=timeout,
+                )
+            else:
+                resp = httpx.get(
+                    base + "/models",
+                    headers={"Authorization": f"Bearer {key}"},
+                    timeout=timeout,
+                )
+        except (
+            Exception
+        ) as exc:  # DNS/connection/timeout — never let it bubble to a 500
+            return {
+                "ok": False,
+                "error": f"Couldn't reach {d.title} ({exc.__class__.__name__}).",
+            }
+        if resp.status_code < 300:
+            return {"ok": True}
+        if resp.status_code in (401, 403):
+            return {"ok": False, "error": "Invalid API key."}
+        return {"ok": False, "error": f"{d.title} returned HTTP {resp.status_code}."}
     try:
         if name == "anthropic":
             resp = httpx.get(

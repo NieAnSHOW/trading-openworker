@@ -1198,7 +1198,9 @@
     "tool_asks_approval": "{{name}} · {{kind}} · 需审批",
     "tools_exposed": "向 OpenWorker 提供的工具",
     "unknown": "未知",
-    "validating": "验证中…"
+    "validating": "验证中…",
+    "delete_provider": "删除供应商…",
+    "delete_provider_confirm": "删除 {{title}}？将清除已保存的密钥和地址；其模型仍显示在列表中但无法使用。"
   },
   "models": {
     "add_btn": "添加",
@@ -1206,7 +1208,9 @@
     "default_badge": "默认",
     "default_locked": "默认模型始终显示 —— 请先将其他模型设为默认",
     "key_set": "已设置密钥",
-    "make_default": "设为默认"
+    "make_default": "设为默认",
+    "ctx_title": "上下文窗口（tokens），留空跟随内置值",
+    "add_ctx_placeholder": "上下文（可选）"
   },
   "onboarding": {
     "cancel": "取消",
@@ -1413,7 +1417,19 @@
     "oauth_start_error": "无法启动登录。",
     "copy_command": "复制命令",
     "test_save_hint": "运行一次只读检查，然后保存。",
-    "test_save_btn": "测试并保存"
+    "test_save_btn": "测试并保存",
+    "custom_add": "添加自定义供应商",
+    "custom_create": "创建并填写密钥",
+    "custom_cancel": "取消",
+    "custom_id_label": "供应商 ID",
+    "custom_title_label": "显示名称（可选）",
+    "custom_title_placeholder": "与 ID 相同",
+    "custom_protocol_label": "接口协议",
+    "custom_protocol_openai": "OpenAI 兼容",
+    "custom_protocol_anthropic": "Anthropic 兼容",
+    "custom_base_label": "Base URL",
+    "custom_help": "模型以 <id>:<模型名> 引用，创建后下一步填写 API 密钥。",
+    "custom_failed": "创建供应商失败。"
   },
   "workspace_trust": {
     "title": "信任此工作区的命令？",

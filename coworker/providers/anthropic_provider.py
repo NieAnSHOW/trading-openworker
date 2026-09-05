@@ -45,6 +45,7 @@ def _usage_from(usage: Any) -> Optional[TokenUsage]:
         cache_write=int(getattr(usage, "cache_creation_input_tokens", 0) or 0),
     )
 
+
 # Required by the Messages API; a ceiling, not a spend target. Sized for file
 # generation, not just chat: a coworker writing a self-contained HTML report ships the
 # whole file inside one tool call's arguments, and 16k proved too small in the field
@@ -107,6 +108,7 @@ def _raise_on_refusal(stop_reason: Any, raw: Any) -> None:
         + suffix
         + " — try rephrasing, or switch model and press Retry."
     )
+
 
 # Anthropic stop_reason → the engine's OpenAI-shaped finish_reason vocabulary.
 _STOP_REASON_MAP = {
@@ -388,6 +390,7 @@ class AnthropicProvider(ProviderClient):
         *,
         default_model: str = "claude-sonnet-4-6",
         api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
         secrets: Any = None,
         thinking_budget: Optional[int] = None,
     ):
@@ -395,8 +398,11 @@ class AnthropicProvider(ProviderClient):
         # before any key exists; the key resolves at call time (explicit → env → SecretStore).
         # Tests inject a `client` directly. `thinking_budget` (tokens, from the provider
         # profile's optional field) opts every request into extended thinking.
+        # `base_url` points the SDK at any Anthropic-compatible endpoint (custom gateway
+        # providers); None → stock api.anthropic.com.
         self._client = client
         self._api_key = api_key
+        self._base_url = base_url
         self._secrets = secrets
         self.default_model = default_model
         self.thinking_budget = thinking_budget or 0
@@ -412,7 +418,7 @@ class AnthropicProvider(ProviderClient):
                     "No Anthropic API key configured. Set ANTHROPIC_API_KEY in the environment, "
                     "or add your key in Manage → Configure Models."
                 )
-            self._client = Anthropic(api_key=key)
+            self._client = Anthropic(api_key=key, base_url=self._base_url)
         return self._client
 
     def _request_kwargs(

@@ -73,6 +73,12 @@ class Config:
     cloud_relay_ws_url: str = (
         "wss://l4z1paxb83.execute-api.us-east-1.amazonaws.com/ocw-connect"
     )
+    # Self-hosted Cool-Admin account gateway (Trading-admin). When set, the
+    # /v1/cloud/* sign-in routes switch to the browser-authorization flow
+    # (coworker/coolauth.py): the authorize page form-POSTs the JWT pair back
+    # to /auth/cool/callback and the member's Vault-sealed provider credentials
+    # land as the `cool` custom provider. Empty ⇒ stock OpenWorker cloud.
+    cool_admin_base_url: str = ""
 
 
 _FIELDS = {
@@ -92,6 +98,7 @@ _FIELDS = {
     "cloud_client_id",
     "cloud_audience",
     "cloud_relay_ws_url",
+    "cool_admin_base_url",
 }
 
 # These fields change what consequential actions can run without a prompt, so the normal
@@ -126,7 +133,9 @@ def workspace_allowed_commands(workspace: str | Path) -> list[str]:
     value = _read(path).get("allowed_commands", [])
     if not isinstance(value, list):
         return []
-    return list(dict.fromkeys(v.strip() for v in value if isinstance(v, str) and v.strip()))
+    return list(
+        dict.fromkeys(v.strip() for v in value if isinstance(v, str) and v.strip())
+    )
 
 
 def load_config(

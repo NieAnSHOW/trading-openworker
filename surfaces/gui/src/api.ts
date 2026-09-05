@@ -895,6 +895,10 @@ export interface ModelSettings {
   // {full id → context window in tokens}, verified matrix entries only — drives the
   // composer's context-fill meter (absent id → the meter hides). Optional for older backends.
   model_context_windows?: Record<string, number>;
+  // User-set per-model context windows ({full id → tokens}); keys absent → matrix value.
+  context_window_overrides?: Record<string, number>;
+  // User-set display names ({full id → name}); merged over model_labels server-side.
+  model_label_overrides?: Record<string, string>;
   // Token savings (PDF attachments): fallback for models without native PDF support,
   // and attach-time thresholds. Optional so the GUI is robust to an older backend.
   pdf_fallback?: "text" | "images";
@@ -940,6 +944,32 @@ export async function setCompactionSettings(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
+  });
+  return res.json();
+}
+
+/** Per-model context-window override (Settings ▸ Context). tokens null/0 clears the override. */
+export async function setContextWindow(
+  model: string,
+  tokens: number | null,
+): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(`${httpBase()}/v1/settings/context-windows`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model, tokens: tokens ?? 0 }),
+  });
+  return res.json();
+}
+
+/** Per-model display-name override. Empty label clears back to the built-in name. */
+export async function setModelLabel(
+  model: string,
+  label: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(`${httpBase()}/v1/settings/model-labels`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model, label }),
   });
   return res.json();
 }
@@ -1826,6 +1856,8 @@ export interface ProviderInfo {
   account?: string | null; // signed-in account label (email or id)
   authorizing?: boolean;
   last_error?: string | null;
+  protocol?: string | null; // custom providers: "openai" | "anthropic"
+  custom?: boolean; // user-defined (Settings ▸ Models ▸ Add provider) — deletable
 }
 
 // -- ChatGPT-subscription provider sign-in (OAuth; tokens never reach the GUI) ------
@@ -1872,6 +1904,32 @@ export async function setProvider(
 /** Forget a provider's stored config (Settings ▸ Models "Remove key…"). */
 export async function removeProvider(name: string): Promise<{ ok: boolean; error?: string }> {
   const res = await fetch(`${httpBase()}/v1/providers/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+  });
+  return res.json();
+}
+
+/** Create a user-defined provider (OpenAI- or Anthropic-compatible endpoint). Identity is
+ * persisted server-side; the API key is then set through the normal provider form. */
+export async function addCustomProvider(
+  name: string,
+  title: string,
+  protocol: "openai" | "anthropic",
+  base_url: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(`${httpBase()}/v1/providers/custom`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, title, protocol, base_url }),
+  });
+  return res.json();
+}
+
+/** Delete a user-defined provider (descriptor + stored key/base URL). */
+export async function removeCustomProvider(
+  name: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(`${httpBase()}/v1/providers/custom/${encodeURIComponent(name)}`, {
     method: "DELETE",
   });
   return res.json();
