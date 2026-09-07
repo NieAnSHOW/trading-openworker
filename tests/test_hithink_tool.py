@@ -27,19 +27,13 @@ def keyed(monkeypatch):
     monkeypatch.setenv("HITHINK_FINANCE_API_KEY", "fuyao-key-123")
 
 
-def test_key_gating_reads_env_live(monkeypatch):
+def test_always_registered_and_key_resolved_per_call(monkeypatch):
+    # Build-time gating would bake a keyless first build into the process-global
+    # trading-tool cache, so the tool must register unconditionally and resolve the
+    # key per call instead.
     monkeypatch.delenv("HITHINK_FINANCE_API_KEY", raising=False)
-    assert not HithinkRequestTool.check_available()
-    # live-read: saving the key in Settings makes the tool available without restart
-    monkeypatch.setenv("HITHINK_FINANCE_API_KEY", "fuyao-key-123")
-    assert HithinkRequestTool.check_available()
-
-
-def test_execute_requires_key(monkeypatch):
-    monkeypatch.delenv("HITHINK_FINANCE_API_KEY", raising=False)
-    out = json.loads(
-        HithinkRequestTool().execute("/api/meta/tickers/search", {"q": "600519"})
-    )
+    assert HithinkRequestTool.check_available() is True
+    out = json.loads(HithinkRequestTool().execute("/api/x"))
     assert out["ok"] is False and "HITHINK_FINANCE_API_KEY" in out["error"]
     assert (
         "fuyao.aicubes.cn/admin" in out["error"]
@@ -118,13 +112,11 @@ def test_execute_caps_runaway_payload(keyed, monkeypatch):
     assert out["ok"] is False and "too large" in out["error"]
 
 
-def test_registers_with_read_risk_and_schema(monkeypatch):
+def test_registers_with_read_risk_and_schema():
     from coworker.risk import RiskClass, classify
     from coworker.tools.registry import ToolRegistry
     from coworker.tools.trading import trading_tools
 
-    monkeypatch.setenv("HITHINK_FINANCE_API_KEY", "fuyao-key-123")
-    monkeypatch.setattr("coworker.tools.trading._cache", None)  # rebuild with the key
     reg = ToolRegistry()
     reg.register_all(trading_tools())
     assert "hithink_request" in reg.names()
@@ -134,6 +126,17 @@ def test_registers_with_read_risk_and_schema(monkeypatch):
         classify("hithink_request", reg.get("hithink_request").metadata)
         is RiskClass.READ
     )
+
+
+def test_iwencai_still_registered_with_key(monkeypatch):
+    # Regression: an editing slip once replaced "iwencai_tool" in _TOOL_MODULES, and
+    # because iwencai is env-gated no schema test noticed its disappearance.
+    monkeypatch.setenv("VIBE_TRADING_IWENCAI_KEY", "k")
+    monkeypatch.setattr("coworker.tools.trading._cache", None)
+    from coworker.tools.trading import trading_tools
+
+    names = {t.__name__ for t in trading_tools()}
+    assert {"iwencai_search", "hithink_request"} <= names
     monkeypatch.setattr(
         "coworker.tools.trading._cache", None
     )  # don't leak the keyed cache

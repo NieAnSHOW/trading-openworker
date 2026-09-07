@@ -5,9 +5,15 @@ define the endpoint contract (path, params, fields) and the agent picks `path` f
 there. This tool is the zero-install data path: one generic authenticated GET against
 https://fuyao.aicubes.cn (contract in the skill's `references/api.md`: envelope
 ``{code, message, request_id, data}``, success = ``code == 0``, auth header
-``X-api-key``). Key-gated like iwencai: without ``HITHINK_FINANCE_API_KEY``
-(Settings → 同花顺金融数据) the tool drops from the registry entirely, and the key is
-re-read at every call so saving it in Settings reaches live sessions without a restart.
+``X-api-key``).
+
+Always registered — unlike iwencai's build-time gating: the process-global
+trading-tool cache would freeze a key-gated tool out on a keyless first build, and no
+engine rebuild could bring it back. Instead ``execute()`` resolves
+``HITHINK_FINANCE_API_KEY`` (Settings → 同花顺金融数据) from the environment on
+every call — the same process ``set_hithink_key`` mutates — so a freshly saved key
+reaches existing sessions on their next call, and a keyless call returns a
+configure-in-Settings envelope instead of a vanished tool.
 """
 
 from __future__ import annotations
@@ -40,7 +46,8 @@ class HithinkRequestTool(BaseTool):
         "`path` is an endpoint path from the hithink-finance skill's references/api "
         "(e.g. /api/meta/tickers/search); `params` holds that endpoint's query "
         "parameters. Returns {ok, data | error, code?, request_id?}; ok=true means "
-        "the business envelope code was 0."
+        "the business envelope code was 0. Needs the API key from Settings → "
+        "同花顺金融数据 (issuance: https://fuyao.aicubes.cn/admin/)."
     )
     parameters = {
         "type": "object",
@@ -64,7 +71,9 @@ class HithinkRequestTool(BaseTool):
 
     @classmethod
     def check_available(cls) -> bool:
-        return bool(os.getenv(_KEY_ENV, "").strip())
+        # Always present: the key is resolved per execute() call, and gating here
+        # would bake a keyless first build into the process-global tool cache.
+        return True
 
     def execute(self, path: str, params: dict[str, Any] | None = None) -> str:
         def _out(payload: dict[str, Any]) -> str:

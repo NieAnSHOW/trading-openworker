@@ -39,6 +39,7 @@ _TOOL_MODULES = (
     "stock_profile_tool",
     "sector_tool",
     "symbol_search_tool",
+    "iwencai_tool",
     "hithink_tool",
     "sec_filings_tool",
     "research_reports_tool",
