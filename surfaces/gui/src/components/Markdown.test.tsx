@@ -22,6 +22,21 @@ describe("Markdown artifact links", () => {
     window.removeEventListener(OPEN_ARTIFACT_EVENT, listener);
   });
 
+  // normalizeUri (mdast-util-to-hast) percent-encodes non-ASCII destinations before
+  // urlTransform runs — the chip must decode back or Chinese-named artifacts never
+  // match the artifact list and read 404s (owner-hit 2026-09-07).
+  it("decodes percent-encoded non-ASCII artifact paths before dispatching", () => {
+    const seen: string[] = [];
+    const listener = (e: Event) => seen.push((e as CustomEvent).detail.path);
+    window.addEventListener(OPEN_ARTIFACT_EVENT, listener);
+
+    render(<Markdown text="完成 — [汇总](artifact:上午股市信息汇总_2026-09-07.md)" />);
+    fireEvent.click(screen.getByTestId("artifact-chip"));
+    expect(seen).toEqual(["上午股市信息汇总_2026-09-07.md"]);
+
+    window.removeEventListener(OPEN_ARTIFACT_EVENT, listener);
+  });
+
   it("ordinary links stay external and never become chips", () => {
     const { container } = render(<Markdown text="see [the docs](https://example.com)" />);
     expect(screen.queryByTestId("artifact-chip")).toBeNull();

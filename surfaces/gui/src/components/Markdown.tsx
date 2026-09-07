@@ -70,7 +70,17 @@ export function Markdown({ text }: { text: string }) {
           a: ({ node: _n, href, children, ...props }) => {
             if (href?.startsWith("artifact:")) {
               const title = Array.isArray(children) ? children.join("") : String(children ?? "");
-              return <ArtifactChip path={href.slice("artifact:".length)} title={title} />;
+              // mdast-util-to-hast percent-encodes non-ASCII destinations (normalizeUri)
+              // BEFORE urlTransform runs, so a chip for 上午汇总.md arrives as %E4%B8%8A….
+              // Decode back to the raw path the artifact list and server both speak
+              // (owner-hit 2026-09-07: Chinese-named deliverables were unopenable from chat).
+              let path = href.slice("artifact:".length);
+              try {
+                path = decodeURIComponent(path);
+              } catch {
+                // malformed sequence — keep as-is
+              }
+              return <ArtifactChip path={path} title={title} />;
             }
             if (href?.startsWith("board:")) {
               const label = Array.isArray(children) ? children.join("") : String(children ?? "");
