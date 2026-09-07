@@ -215,3 +215,22 @@ def test_hithink_key_roundtrip_env_injection_and_clear(tmp_path, monkeypatch):
         is None
     )
     monkeypatch.delenv("HITHINK_FINANCE_API_KEY", raising=False)
+
+
+def test_hithink_key_set_drops_cached_engines_of_idle_sessions(tmp_path, monkeypatch):
+    """Saving the key rebuilds engines on the next turn (executor env + tool
+    availability freeze at engine build); a session with a running turn keeps its
+    engine until the turn finishes — same contract as set_binding."""
+    from coworker.server.manager import SessionManager
+
+    monkeypatch.delenv("HITHINK_FINANCE_API_KEY", raising=False)
+    monkeypatch.setenv("COWORKER_STATE_DIR", str(tmp_path / "state"))
+    manager = SessionManager(data_dir=tmp_path / "data")
+    manager._engines["idle"] = object()
+    manager._engines["running"] = object()
+    manager._running_sessions.add("running")
+
+    resp = manager.set_hithink_key("fuyao-key-123")
+    assert resp["ok"] is True
+    assert "idle" not in manager._engines
+    assert "running" in manager._engines

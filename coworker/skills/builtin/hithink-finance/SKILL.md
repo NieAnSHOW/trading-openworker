@@ -7,6 +7,8 @@ description: 当用户或 Agent 需要通过同花顺金融数据服务获取、
 
 这是“同花顺金融数据服务”的统一 Agent 入口和主路由。它负责识别需求、探测当前能力、处理配置边界并选择接入方式；选定方式后只读取对应的一级入口，由该入口继续按需披露详细契约。
 
+> 链接约定：本文档内所有指向 `references/` 的链接均以**技能名前缀** `hithink-finance/references/...` 书写。OpenWorker 中先 `load_skill("hithink-finance")` 取得 `resources_path`，再用绝对路径读取参考文档（如 `<resources_path>/references/api.md`）。新增技能文档时务必沿用前缀形式。
+
 ## 直接描述需求
 
 允许用户使用自然语言开始，不要求用户先理解命令、接口、`thscode` 或复权参数。例如：
@@ -52,10 +54,10 @@ description: 当用户或 Agent 需要通过同花顺金融数据服务获取、
 
 | 场景 | 首选 | 一级入口 |
 | --- | --- | --- |
-| 人类终端、Agent 执行、自动化、远端与本地数据一体化 | CLI | [cli.md](references/cli.md) |
-| Chat/IDE 会话已连接托管服务 | MCP | [mcp.md](references/mcp.md) |
-| 零依赖 HTTP、自定义脚本、服务端集成 | REST API | [api.md](references/api.md) |
-| Python、Notebook、研究流程或已有 marketdb | Python SDK | [python-sdk.md](references/python-sdk.md) |
+| 人类终端、Agent 执行、自动化、远端与本地数据一体化 | CLI | [cli.md](hithink-finance/references/cli.md) |
+| Chat/IDE 会话已连接托管服务 | MCP | [mcp.md](hithink-finance/references/mcp.md) |
+| 零依赖 HTTP、自定义脚本、服务端集成 | REST API | [api.md](hithink-finance/references/api.md) |
+| Python、Notebook、研究流程或已有 marketdb | Python SDK | [python-sdk.md](hithink-finance/references/python-sdk.md) |
 
 CLI 高度封装远端取数、本地 DuckDB、结构化输出和大结果落盘，对人类与 Agent 都友好。MCP 最适合 Chat 场景。REST API 可塑性最高。Python SDK 适合二次开发和研究。
 
@@ -70,7 +72,7 @@ CLI 高度封装远端取数、本地 DuckDB、结构化输出和大结果落盘
 3. 用户级 `credentials.env`：Windows `%APPDATA%\hithink-finance\credentials.env`，macOS `~/Library/Application Support/hithink-finance/credentials.env`，Linux `${XDG_CONFIG_HOME:-~/.config}/hithink-finance/credentials.env`。
 4. 兼容旧来源：`FUYAO_TOKEN`、`API_KEY` 或已有 CLI 系统凭据；旧名称不再用于新配置。
 
-全部缺失时，根据当前平台给出 [CLI 安装与配置入口](references/cli/setup.md) 中的全局环境变量指引，并使用以下说明：
+全部缺失时，根据当前平台给出 [CLI 安装与配置入口](hithink-finance/references/cli/setup.md) 中的全局环境变量指引，并使用以下说明：
 
 > 请先前往 https://fuyao.aicubes.cn/admin 注册并获取统一 API Key。获取后，可以按照下面的命令配置当前用户的全局环境变量；也可以直接发给我，我来为你完成配置。API Key 属于敏感凭据，聊天平台可能保留消息记录，因此更推荐使用隐藏输入或环境变量方式。
 
@@ -84,7 +86,7 @@ CLI 高度封装远端取数、本地 DuckDB、结构化输出和大结果落盘
 
 - 用户明确选择 MCP、REST 或 Python 时，不安装 CLI。
 - 用户直接提出金融任务、未指定接入方式且 CLI 不存在时，简短告知将安装官方 CLI 并继续；平台需要授权时遵循授权机制。安装失败时回退到已有 MCP、REST 或 Python 路径。
-- CLI 刚安装、统一凭据刚配置或更新、或 CLI 认证失效但统一凭据有效时，按 [CLI setup](references/cli/setup.md) 通过 `--api-key-stdin` 安全登录；已有 CLI 凭据需要同步时使用 `--replace`，不先 logout。
+- CLI 刚安装、统一凭据刚配置或更新、或 CLI 认证失效但统一凭据有效时，按 [CLI setup](hithink-finance/references/cli/setup.md) 通过 `--api-key-stdin` 安全登录；已有 CLI 凭据需要同步时使用 `--replace`，不先 logout。
 - CLI 系统凭据是统一凭据的安全副本，使 CLI 可独立运行；普通调用不重复写入系统凭据。
 - 确定使用 CLI 后，先定位**当前 Agent 的 Skills 目录**，并核验其中有 10 个 CLI 配套 Skill（每个目录都必须含 `SKILL.md`）。`hithink-finance skills status --format json` 只提供包内 `canonical` 来源，不能证明当前 Agent 已发现或加载这些 Skills。
 - 当前 Agent 缺少配套 Skill 时，先运行 `hithink-finance skills sync --format json` 并对同一目录复查。该命令可能不认识所有 Agent 工具；仍缺失且已知当前 Agent 的可写 Skills 目录时，Agent 必须从 `canonical` 主动复制缺失的完整 Skill 目录，再复查并在需要时新建会话重新发现。只复制官方的缺失目录，不覆盖无关 Skills，不把包内来源复制到项目目录或未知 Agent 目录；路径未知或无写入权限时，报告该唯一阻塞项。
@@ -117,10 +119,10 @@ CLI 高度封装远端取数、本地 DuckDB、结构化输出和大结果落盘
 
 ## 故障路由
 
-- CLI 不存在、版本异常、认证未配置或内置 Skills 不完整：进入 [CLI 入口](references/cli.md)。
-- MCP 未连接、认证失败或需要识别工具意图：进入 [MCP 入口](references/mcp.md)。
-- REST 参数、字段或错误码不明确：进入 [API 入口](references/api.md)。
-- Python 安装、远端 toolkit 或本地 marketdb 问题：进入 [Python SDK 入口](references/python-sdk.md)。
+- CLI 不存在、版本异常、认证未配置或内置 Skills 不完整：进入 [CLI 入口](hithink-finance/references/cli.md)。
+- MCP 未连接、认证失败或需要识别工具意图：进入 [MCP 入口](hithink-finance/references/mcp.md)。
+- REST 参数、字段或错误码不明确：进入 [API 入口](hithink-finance/references/api.md)。
+- Python 安装、远端 toolkit 或本地 marketdb 问题：进入 [Python SDK 入口](hithink-finance/references/python-sdk.md)。
 
 ## 适用对象与结果偏好
 
@@ -163,3 +165,4 @@ CLI 高度封装远端取数、本地 DuckDB、结构化输出和大结果落盘
 - **统一 API Key**：用户在 OpenWorker 设置（Settings → General → 同花顺金融数据）保存 Key 后，运行时自动注入为 `HITHINK_FINANCE_API_KEY` 环境变量——REST / Python / CLI 子进程均可直接读取，无需再检查 `credentials.env`。获取 Key：<https://fuyao.aicubes.cn/admin/>。环境变量缺失时按上文口径引导用户到设置页配置。
 - **接入方式优先级**：OpenWorker 桌面版不保证有 Node.js。默认走 **REST API**（`curl` 或 Python `httpx`，均零额外依赖）；仅当 PATH 中已存在 `hithink-finance` CLI 时才优先 CLI。不要主动 `npm install` 安装 CLI——确需安装时按应用审批流程请求授权。
 - **大结果落盘**：写入会话 scratch 目录，报告相对路径即可。
+- **可执行入口**：REST 调用优先使用内置只读工具 `hithink_request`（免审批、自动携带统一 Key、按上文 envelope 校验 `code=0`）：`path` 即本 skill `references/api` 中的端点路径，`params` 为该端点查询参数。该工具在 Key 缺失时自动从工具列表消失；仅当它不可用（未配 Key）时才按上文口径引导配置，配好 Key 的新会话会自动带出该工具。

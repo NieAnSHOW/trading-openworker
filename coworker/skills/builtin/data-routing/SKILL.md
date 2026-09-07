@@ -64,7 +64,7 @@ is required only where listed (no key listed = free / no auth).
 | Market screen | `screen_market` | A-share | — |
 | Symbol search | `search_symbol` | A-share, US | — |
 | Macro / FRED series | `get_macro_series` | Macro (US/global) | `FRED_API_KEY` |
-| A股官方数据（行情/K线/财报/估值/指数/板块/竞价/涨停/热榜/龙虎榜/基金） | `hithink-finance` skill (同花顺官方 REST) | A-share | `HITHINK_FINANCE_API_KEY` (Settings) |
+| A股官方数据（行情/K线/财报/估值/指数/板块/竞价/涨停/热榜/龙虎榜/基金） | `hithink_request` tool + `hithink-finance` skill (同花顺官方) | A-share | `HITHINK_FINANCE_API_KEY` (Settings) |
 | iWenCai NL search (问财) | `iwencai_search` | A-share | `VIBE_TRADING_IWENCAI_KEY` |
 
 Notes:

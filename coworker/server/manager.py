@@ -3771,6 +3771,12 @@ class SessionManager:
         else:
             self.secrets.delete("hithink-finance")
             os.environ.pop("HITHINK_FINANCE_API_KEY", None)
+        # Live sessions: drop cached engines so the next turn rebuilds with the key in
+        # the process env (executor env + tool availability freeze at engine build).
+        # Same contract as set_binding — running turns finish on the old engine.
+        for sid in list(self._engines):
+            if not self.is_running(sid):
+                self._engines.pop(sid, None)
         return {"ok": True, **self.get_settings()}
 
     def set_default_model(self, model: str) -> dict[str, Any]:

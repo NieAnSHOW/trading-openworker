@@ -45,4 +45,4 @@ fund_bars = fund_market_historical("510300.SH", 1704038400000, 1735660799000)
 manager = fund_managers_detail("<manager-id>")
 ```
 
-函数签名与脚本 `--help` 是 Python 适配层的运行契约；上游请求与响应字段按本 Skill 的 [REST API 入口](../api.md) 继续路由。真实调用先检查 `code=0`，大结果必须重定向或由程序写入文件。
+函数签名与脚本 `--help` 是 Python 适配层的运行契约；上游请求与响应字段按本 Skill 的 [REST API 入口](hithink-finance/references/api.md) 继续路由。真实调用先检查 `code=0`，大结果必须重定向或由程序写入文件。
