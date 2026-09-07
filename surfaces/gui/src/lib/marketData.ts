@@ -7,7 +7,7 @@
 // coworker/dashboard.py) because the client SDK has no board-heat API.
 
 import { StockSDK } from "stock-sdk";
-import { getDashboardBoardHeat, type DashboardBoardHeatItem } from "../api";
+import { getDashboardBoardHeat, getDashboardDailyBars, type DashboardBoardHeatItem } from "../api";
 
 const sdk = new StockSDK();
 const SOURCE = "stock-sdk";
@@ -600,21 +600,21 @@ export async function fetchWatchlistDailyBars(
   code: string,
 ): Promise<DashboardDataResult<PriceBar[]>> {
   try {
-    // ~9 calendar months back ≈ 180 trading bars of daily context.
-    const startDate = new Date(Date.now() - 270 * 86_400_000)
-      .toISOString()
-      .slice(0, 10)
-      .replace(/-/g, "");
-    const rows = await sdk.kline.cn(code, { startDate });
-    const data = rows.map((row) => ({
-      time: String(row.date ?? ""),
-      open: fin(row.open) ?? 0,
-      high: fin(row.high) ?? 0,
-      low: fin(row.low) ?? 0,
-      close: fin(row.close) ?? 0,
-      volume: fin(row.volume) ?? 0,
-    }));
-    return { data, asOf: now(), stale: false };
+    // Server-side Tencent fqkline daily bars (coworker/dashboard.py) — the
+    // browser JSONP kline.cn source this replaces failed intermittently.
+    const res = await getDashboardDailyBars(code);
+    return {
+      data: res.data.map((row) => ({
+        time: String(row.time ?? ""),
+        open: fin(row.open) ?? 0,
+        high: fin(row.high) ?? 0,
+        low: fin(row.low) ?? 0,
+        close: fin(row.close) ?? 0,
+        volume: fin(row.volume) ?? 0,
+      })),
+      asOf: res.as_of,
+      stale: false,
+    };
   } catch (error) {
     return staleResult([], error);
   }

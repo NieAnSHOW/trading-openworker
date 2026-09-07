@@ -40,14 +40,18 @@ _MAX_CHARS = 60_000
 class HithinkRequestTool(BaseTool):
     name = "hithink_request"
     description = (
-        "Query the official 同花顺金融数据 (hithink-finance) A-share API: real-time "
-        "quotes, K-lines, corporate actions, financials, valuations, indexes and "
-        "boards, auction snapshots, limit-up pools, hot lists, dragon-tiger, funds. "
-        "`path` is an endpoint path from the hithink-finance skill's references/api "
-        "(e.g. /api/meta/tickers/search); `params` holds that endpoint's query "
-        "parameters. Returns {ok, data | error, code?, request_id?}; ok=true means "
-        "the business envelope code was 0. Needs the API key from Settings → "
-        "同花顺金融数据 (issuance: https://fuyao.aicubes.cn/admin/)."
+        "PRIMARY data source for A-share (A股) data when the 同花顺 key is "
+        "configured (Settings → 同花顺金融数据): official 同花顺金融数据 "
+        "(hithink-finance) API — real-time quotes, K-lines, corporate actions, "
+        "financials, valuations, indexes and boards, auction snapshots, limit-up "
+        "pools, hot lists, dragon-tiger, funds. `path` is an endpoint path from "
+        "the hithink-finance skill's references/api (e.g. /api/meta/tickers/"
+        "search); `params` holds that endpoint's query parameters. Returns "
+        "{ok, data | error, code?, request_id?}; ok=true means the business "
+        "envelope code was 0. For A-share intents prefer this tool over the "
+        "other A-share data tools; fall back to those ONLY when this source is "
+        "unavailable — no key configured (the error envelope says so), or the "
+        "endpoint keeps failing. Key issuance: https://fuyao.aicubes.cn/admin/."
     )
     parameters = {
         "type": "object",

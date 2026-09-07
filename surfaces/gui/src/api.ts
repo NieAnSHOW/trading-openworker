@@ -2935,6 +2935,30 @@ export async function getDashboardBoardHeat(
   return res.json();
 }
 
+export interface DashboardDailyBarsResponse {
+  data: {
+    time: string;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+  }[];
+  as_of: string;
+  source: string;
+  stale: boolean;
+}
+
+export async function getDashboardDailyBars(
+  symbol: string,
+): Promise<DashboardDailyBarsResponse> {
+  const res = await fetch(
+    `${httpBase()}/v1/dashboard/daily-bars?symbol=${encodeURIComponent(symbol)}`,
+  );
+  if (!res.ok) throw new Error(`daily bars failed (${res.status})`);
+  return res.json();
+}
+
 // -- Watchlist (自选股; shared store, also read by the agent's watchlist_read tool) --
 
 export interface WatchlistStock {

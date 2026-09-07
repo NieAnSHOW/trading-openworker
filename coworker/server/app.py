@@ -791,6 +791,29 @@ def create_app(manager: SessionManager) -> FastAPI:
             "stale": False,
         }
 
+    # -- Daily K bars for the 自选 detail chart (Tencent fqkline; replaces the
+    # flaky client-side kline.cn JSONP fetch — see coworker/dashboard.py) --
+    @app.get("/v1/dashboard/daily-bars")
+    async def dashboard_daily_bars(symbol: str) -> dict[str, Any]:
+        from datetime import datetime, timezone
+
+        from .. import dashboard
+
+        try:
+            rows = await asyncio.to_thread(dashboard.fetch_daily_bars, symbol)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503, detail=f"daily bars unavailable: {exc}"
+            )
+        return {
+            "data": rows,
+            "as_of": datetime.now(timezone.utc).isoformat(),
+            "source": "tencent-kline",
+            "stale": False,
+        }
+
     # -- A-share watchlist (自选股; shared store, also read by the agent's
     # watchlist_read tool — see coworker/watchlist.py) --
     @app.get("/v1/watchlist")

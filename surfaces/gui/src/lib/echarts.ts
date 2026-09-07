@@ -33,6 +33,9 @@ export function connectCharts() {
   }
 }
 
+/** Named shape of an initialized chart — consumers import this, not ReturnType. */
+export type EChartsInstance = echarts.ECharts;
+
 /**
  * Minimal shape of the echarts axis-tooltip params our formatters read.
  * echarts' own CallbackDataParams is not part of the core bundle types, so the

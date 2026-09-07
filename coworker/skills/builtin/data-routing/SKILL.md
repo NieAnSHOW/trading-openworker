@@ -95,6 +95,11 @@ same-market sources automatically. Only set a concrete source when the user asks
 - **A-shares (analysis/research)**: `hithink-finance` skill (同花顺官方, key-gated,
   primary for 行情/财报/估值/板块/特色数据) > tencent / mootdx (never banned) >
   tushare (`TUSHARE_TOKEN`) > baostock / akshare > eastmoney (throttled).
+  When `HITHINK_FINANCE_API_KEY` is configured, treat hithink (`hithink_request`
+  + the skill) as the DEFAULT for A-share intents and degrade to the fallbacks
+  above ONLY when it is completely unavailable: key missing (the tool returns a
+  configure-in-Settings envelope) or repeated upstream failures. Do not skip it
+  preemptively.
   Backtest OHLCV still uses the registered loader chain (`source: "auto"`) —
   hithink-finance is not a backtest loader source.
 - **US stocks**: stooq / yahoo > tiingo / finnhub / fmp / alphavantage (key-gated) >

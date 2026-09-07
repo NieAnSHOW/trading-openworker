@@ -1,9 +1,10 @@
 // A股自选 (watchlist page) - ported from Vibe-Trading-Desktop pages/Watchlist.tsx.
 // The stock list lives in a server-side shared store (coworker/watchlist.py) that
-// the agent's `watchlist_read` tool also reads; quotes and bars are fetched
-// client-side from the `stock-sdk` package (same data path as the dashboard).
+// the agent's `watchlist_read` tool also reads; quotes and intraday bars come
+// from the `stock-sdk` package; daily K bars from the server (Tencent fqkline,
+// see coworker/dashboard.py — the browser kline.cn source was unreliable).
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   addWatchlistStock,
@@ -19,10 +20,8 @@ import {
   type PriceBar,
   type WatchlistQuote,
 } from "../lib/marketData";
-import { calcMA } from "../lib/indicators";
-import { CHART_GROUP, connectCharts, echarts } from "../lib/echarts";
-import { getChartTheme } from "../lib/chart-theme";
-import { useDarkMode } from "../hooks/useDarkMode";
+import { CandlestickChart } from "./charts/CandlestickChart";
+import { IntradayChart } from "./charts/IntradayChart";
 import { Icon } from "./Icon";
 
 const A_STOCK_RE = /^\d{6}$/;
@@ -75,134 +74,6 @@ function useWatchlistData() {
   );
 
   return { t, stocks, quotes, loading, error, refresh, refreshQuotes, add, remove };
-}
-
-// ── Charts ───────────────────────────────────────────────────
-
-function CandleChart({ bars }: { bars: PriceBar[] }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const { dark } = useDarkMode();
-
-  useEffect(() => {
-    if (!ref.current || bars.length === 0) return;
-    const t = getChartTheme();
-    const chart = echarts.init(ref.current);
-    chart.group = CHART_GROUP;
-    connectCharts();
-
-    const times = bars.map((b) => b.time);
-    const closes = bars.map((b) => b.close);
-    const candles = bars.map((b) => [b.open, b.close, b.low, b.high]);
-    const maSeries = [5, 10, 20].map((period, i) => ({
-      name: `MA${period}`,
-      type: "line" as const,
-      showSymbol: false,
-      data: calcMA(closes, period),
-      lineStyle: { width: 1, color: t.maColors[i] },
-      itemStyle: { color: t.maColors[i] },
-    }));
-
-    chart.setOption({
-      backgroundColor: "transparent",
-      animation: false,
-      tooltip: {
-        trigger: "axis",
-        axisPointer: { type: "cross" },
-        backgroundColor: t.tooltipBg,
-        borderColor: t.tooltipBorder,
-        textStyle: { color: t.tooltipText, fontSize: 11 },
-      },
-      legend: { data: ["MA5", "MA10", "MA20"], textStyle: { color: t.textColor, fontSize: 10 } },
-      grid: { left: 8, right: 8, top: 26, bottom: 8, containLabel: true },
-      xAxis: {
-        type: "category",
-        data: times,
-        boundary: false,
-        axisLine: { lineStyle: { color: t.axisColor } },
-        axisLabel: { color: t.textColor, fontSize: 10 },
-      },
-      yAxis: {
-        type: "value",
-        scale: true,
-        splitLine: { lineStyle: { color: t.gridColor } },
-        axisLabel: { color: t.textColor, fontSize: 10 },
-      },
-      series: [
-        {
-          name: "K",
-          type: "candlestick",
-          data: candles,
-          // ChartTheme is locale-aware: China = red up / green down.
-          itemStyle: { color: t.upColor, color0: t.downColor, borderColor: t.upColor, borderColor0: t.downColor },
-        },
-        ...maSeries,
-      ],
-    });
-    const onResize = () => chart.resize();
-    window.addEventListener("resize", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      chart.dispose();
-    };
-  }, [bars, dark]);
-
-  return <div ref={ref} style={{ height: 420, width: "100%" }} data-testid="watchlist-daily-chart" />;
-}
-
-function IntradayChart({ bars }: { bars: PriceBar[] }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const { dark } = useDarkMode();
-
-  useEffect(() => {
-    if (!ref.current || bars.length === 0) return;
-    const t = getChartTheme();
-    const chart = echarts.init(ref.current);
-    chart.group = CHART_GROUP;
-    connectCharts();
-
-    chart.setOption({
-      backgroundColor: "transparent",
-      animation: false,
-      tooltip: {
-        trigger: "axis",
-        backgroundColor: t.tooltipBg,
-        borderColor: t.tooltipBorder,
-        textStyle: { color: t.tooltipText, fontSize: 11 },
-      },
-      grid: { left: 8, right: 8, top: 12, bottom: 8, containLabel: true },
-      xAxis: {
-        type: "category",
-        data: bars.map((b) => b.time.slice(-5)),
-        boundary: false,
-        axisLine: { lineStyle: { color: t.axisColor } },
-        axisLabel: { color: t.textColor, fontSize: 10 },
-      },
-      yAxis: {
-        type: "value",
-        scale: true,
-        splitLine: { lineStyle: { color: t.gridColor } },
-        axisLabel: { color: t.textColor, fontSize: 10 },
-      },
-      series: [
-        {
-          name: "price",
-          type: "line",
-          showSymbol: false,
-          data: bars.map((b) => b.close),
-          lineStyle: { width: 1.5, color: t.infoColor },
-          areaStyle: { opacity: 0.12, color: t.infoColor },
-        },
-      ],
-    });
-    const onResize = () => chart.resize();
-    window.addEventListener("resize", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      chart.dispose();
-    };
-  }, [bars, dark]);
-
-  return <div ref={ref} style={{ height: 240, width: "100%" }} data-testid="watchlist-intraday-chart" />;
 }
 
 // ── Page shell (full-bleed main, same variant as the dashboard) ──
@@ -392,7 +263,9 @@ function DetailPanel({
           {!dailyLoading && daily?.stale && (
             <p className="mb-2 text-xs text-red-500">{daily.error}</p>
           )}
-          {!dailyLoading && bars.length > 0 && <CandleChart bars={bars} />}
+          {!dailyLoading && bars.length > 0 && (
+            <CandlestickChart data={bars} height={440} defaultRange="3M" />
+          )}
           {!dailyLoading && !daily?.stale && bars.length === 0 && (
             <p className="text-xs text-muted">{t("watchlist.noChartData")}</p>
           )}
@@ -405,7 +278,9 @@ function DetailPanel({
               {t("watchlist.intradayError")}
             </div>
           )}
-          {!intradayLoading && !intraday?.stale && intradayBars.length > 0 && <IntradayChart bars={intradayBars} />}
+          {!intradayLoading && !intraday?.stale && intradayBars.length > 0 && (
+            <IntradayChart data={intradayBars} height={300} testId="watchlist-intraday-chart" />
+          )}
           {!intradayLoading && !intraday?.stale && intradayBars.length === 0 && (
             <div className="flex min-h-32 flex-col items-center justify-center rounded-md bg-chrome p-3 text-center">
               <p className="text-xs font-medium">{t("watchlist.intradayUnavailable")}</p>
@@ -433,7 +308,9 @@ export function WatchlistView() {
   const [intraday, setIntraday] = useState<DashboardDataResult<PriceBar[]> | null>(null);
   const [intradayLoading, setIntradayLoading] = useState(false);
 
-  // Initial load + quote polling (3s, paused while the tab is hidden).
+  // Initial load + quote polling (3s tick while visible, immediate refresh on
+  // tab return — same semantics as upstream pages/Watchlist.tsx; failures
+  // keep old data).
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -441,11 +318,18 @@ export function WatchlistView() {
   useEffect(() => {
     if (stocks.length === 0) return;
     const codes = stocks.map((s) => s.code);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refreshQuotes(codes);
+    };
+    document.addEventListener("visibilitychange", onVisible);
     void refreshQuotes(codes);
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") void refreshQuotes(codes);
     }, QUOTES_POLL_MS);
-    return () => window.clearInterval(timer);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.clearInterval(timer);
+    };
   }, [stocks, refreshQuotes]);
 
   // Auto-select the first stock once the list loads.
