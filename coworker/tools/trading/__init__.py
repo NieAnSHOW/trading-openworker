@@ -41,6 +41,7 @@ _TOOL_MODULES = (
     "symbol_search_tool",
     "iwencai_tool",
     "hithink_tool",
+    "watchlist_tool",
     "sec_filings_tool",
     "research_reports_tool",
     "alpha_zoo_tool",

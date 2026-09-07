@@ -2903,3 +2903,74 @@ export async function getRunCode(runId: string, workspace?: string): Promise<Rec
   if (!res.ok) return {};
   return res.json();
 }
+
+// --- Market dashboard board heat (行情 page; /v1/dashboard/*) ---
+// Index quotes / breadth / rankings come from the client-side stock-sdk package;
+// only board heat is server-side (10jqka hot list, coworker/dashboard.py).
+
+export interface DashboardBoardHeatItem {
+  code: string;
+  name: string;
+  change_pct: number | null;
+  rise_count: number | null;
+  fall_count: number | null;
+  leading_stock: string | null;
+  leading_stock_change_pct: number | null;
+}
+
+export interface DashboardBoardHeatResponse {
+  data: DashboardBoardHeatItem[];
+  as_of: string;
+  source: string;
+  stale: boolean;
+}
+
+export async function getDashboardBoardHeat(
+  kind: "concept" | "industry",
+): Promise<DashboardBoardHeatResponse> {
+  const res = await fetch(
+    `${httpBase()}/v1/dashboard/board-heat?kind=${encodeURIComponent(kind)}`,
+  );
+  if (!res.ok) throw new Error(`board heat failed (${res.status})`);
+  return res.json();
+}
+
+// -- Watchlist (自选股; shared store, also read by the agent's watchlist_read tool) --
+
+export interface WatchlistStock {
+  code: string;
+  name: string | null;
+  market: string;
+  added_at: string;
+}
+
+export interface WatchlistAddResult {
+  added: boolean;
+  exists: boolean;
+}
+
+export async function fetchWatchlist(): Promise<WatchlistStock[]> {
+  const res = await fetch(`${httpBase()}/v1/watchlist`);
+  if (!res.ok) throw new Error(`watchlist failed (${res.status})`);
+  return (await res.json()).stocks;
+}
+
+export async function addWatchlistStock(
+  code: string,
+): Promise<WatchlistAddResult> {
+  const res = await fetch(`${httpBase()}/v1/watchlist`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  if (!res.ok) throw new Error(`watchlist add failed (${res.status})`);
+  return res.json();
+}
+
+export async function deleteWatchlistStock(code: string): Promise<void> {
+  const res = await fetch(
+    `${httpBase()}/v1/watchlist/${encodeURIComponent(code)}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok) throw new Error(`watchlist delete failed (${res.status})`);
+}

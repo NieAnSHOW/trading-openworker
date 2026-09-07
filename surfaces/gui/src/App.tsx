@@ -70,6 +70,8 @@ import { SendFolderDialog } from "./components/SendFolderDialog";
 import { Onboarding } from "./components/Onboarding";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { ScheduledView } from "./components/ScheduledView";
+import { DashboardView } from "./components/DashboardView";
+import { WatchlistView } from "./components/WatchlistView";
 import { RightRail } from "./components/RightRail";
 import { IntegrationsView } from "./components/IntegrationsView";
 import { SettingsView } from "./components/SettingsView";
@@ -279,7 +281,7 @@ export function App() {
   // load; corrected by loadSettings.
   const [modelReady, setModelReady] = useState(true);
   const [surface, setSurface] = useState<
-    "session" | "scheduled" | "integrations" | "audit" | "inbox" | "persona" | "research"
+    "session" | "scheduled" | "dashboard" | "watchlist" | "integrations" | "audit" | "inbox" | "persona" | "research"
   >("session");
   // A remembered Scheduled-detail target must not outlive the surface (see the
   // scheduledOpenId comment above): nav re-entry lands on the list, never a
@@ -1741,6 +1743,10 @@ export function App() {
           openPersona(id, "session");
         }}
         onOpenScheduled={() => setSurface("scheduled")}
+        dashboardActive={surface === "dashboard"}
+        watchlistActive={surface === "watchlist"}
+        onOpenDashboard={() => setSurface("dashboard")}
+        onOpenWatchlist={() => setSurface("watchlist")}
         onOpenAutomation={(id) => {
           setScheduledOpenId(id);
           setSurface("scheduled");
@@ -1758,7 +1764,11 @@ export function App() {
         onCollapse={toggleNav}
         onPeekLeave={() => setNavPeek(false)}
       />
-      {surface === "scheduled" ? (
+      {surface === "dashboard" ? (
+        <DashboardView />
+      ) : surface === "watchlist" ? (
+        <WatchlistView />
+      ) : surface === "scheduled" ? (
         <ScheduledView
           onOpenRun={openRunSession}
           onRunNow={runTaskNow}

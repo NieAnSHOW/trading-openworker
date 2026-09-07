@@ -144,10 +144,14 @@ interface Props {
   // setup-row picker (UX-029).
   onOpenPersona: (id: string) => void;
   onOpenScheduled: () => void;
+  onOpenDashboard: () => void;
+  onOpenWatchlist: () => void;
   // Scheduled-band row click: open the Automations surface ON that automation (UX-023).
   onOpenAutomation: (id: string) => void;
   onOpenIntegrations: () => void;
   onOpenResearch: () => void;
+  dashboardActive: boolean;
+  watchlistActive: boolean;
   onOpenAudit: () => void;
   onOpenInbox: () => void;
   scheduledActive: boolean;
@@ -1171,6 +1175,32 @@ export function Sidebar(props: Props) {
         >
           <Icon name="clock" size={15} className="shrink-0" />
           <span className="flex-1">{t("sidebar.automations")}</span>
+        </button>
+      </div>
+      <div className="px-2.5 mt-0.5">
+        <button
+          className={
+            "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-left hover:bg-chromeHover hover:text-ink " +
+            (props.dashboardActive ? "text-ink bg-chromeHover" : "text-muted")
+          }
+          data-testid="nav-dashboard"
+          onClick={props.onOpenDashboard}
+        >
+          <Icon name="pulse" size={15} className="shrink-0" />
+          <span className="flex-1">{t("sidebar.dashboard")}</span>
+        </button>
+      </div>
+      <div className="px-2.5 mt-0.5">
+        <button
+          className={
+            "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-left hover:bg-chromeHover hover:text-ink " +
+            (props.watchlistActive ? "text-ink bg-chromeHover" : "text-muted")
+          }
+          data-testid="nav-watchlist"
+          onClick={props.onOpenWatchlist}
+        >
+          <Icon name="star" size={15} className="shrink-0" />
+          <span className="flex-1">{t("sidebar.watchlist")}</span>
         </button>
       </div>
       <div className="px-2.5 mt-0.5">

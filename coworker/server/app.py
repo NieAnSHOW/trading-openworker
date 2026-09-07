@@ -767,6 +767,54 @@ def create_app(manager: SessionManager) -> FastAPI:
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
 
+    # -- Market dashboard board heat (10jqka hot list; the GUI 行情 page) --
+    @app.get("/v1/dashboard/board-heat")
+    async def dashboard_board_heat(kind: str = "concept") -> dict[str, Any]:
+        from datetime import datetime, timezone
+
+        from .. import dashboard
+
+        if kind not in ("concept", "industry"):
+            raise HTTPException(
+                status_code=400, detail="kind must be concept or industry"
+            )
+        try:
+            rows = await asyncio.to_thread(dashboard.fetch_board_heat, kind)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503, detail=f"{kind} board data unavailable: {exc}"
+            )
+        return {
+            "data": rows,
+            "as_of": datetime.now(timezone.utc).isoformat(),
+            "source": "10jqka-hot-list",
+            "stale": False,
+        }
+
+    # -- A-share watchlist (自选股; shared store, also read by the agent's
+    # watchlist_read tool — see coworker/watchlist.py) --
+    @app.get("/v1/watchlist")
+    def watchlist_list() -> dict[str, Any]:
+        from .. import watchlist
+
+        return {"stocks": watchlist.list_stocks()}
+
+    @app.post("/v1/watchlist")
+    def watchlist_add(body: dict) -> dict[str, Any]:
+        from .. import watchlist
+
+        code = str((body or {}).get("code", ""))
+        try:
+            return watchlist.add_stock(code)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+    @app.delete("/v1/watchlist/{code}")
+    def watchlist_delete(code: str) -> dict[str, Any]:
+        from .. import watchlist
+
+        return watchlist.remove_stock(code)
+
     @app.post("/v1/skills")
     def create_skill(body: dict) -> dict[str, Any]:
         return manager.create_skill(body or {})

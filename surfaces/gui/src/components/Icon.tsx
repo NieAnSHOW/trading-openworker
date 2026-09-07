@@ -52,7 +52,9 @@ export type IconName =
   | "barChart"
   | "fileCheck"
   | "fingerprint"
+  | "pulse"
   | "database"
+  | "star"
   | "x"
 
 export function Icon({
@@ -460,6 +462,20 @@ export function Icon({
           <path d="M10 11v6M14 11v6" />
           <path d="M6.5 7l.9 12c.1.9.8 1.5 1.7 1.5h7.8c.9 0 1.6-.6 1.7-1.5l.9-12" />
           <path d="M9.2 7V4.9c0-.5.4-.9.9-.9h3.8c.5 0 .9.4.9.9V7" />
+        </svg>
+      );
+    case "star":
+      // Watchlist nav row — the 自选 page.
+      return (
+        <svg {...s}>
+          <path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+        </svg>
+      );
+    case "pulse":
+      // Market activity heartbeat — the 行情 dashboard nav row.
+      return (
+        <svg {...s}>
+          <polyline points="2.5 12 7 12 10 5.5 14 18.5 17 12 21.5 12" />
         </svg>
       );
   }
