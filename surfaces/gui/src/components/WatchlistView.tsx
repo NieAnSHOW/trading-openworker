@@ -81,8 +81,11 @@ function useWatchlistData() {
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="flex-1 min-w-0 flex bg-paper">
-      <div className="flex-1 min-w-0 overflow-y-auto hairline-scroll">
-        <div className="w-full max-w-none px-7 py-6">{children}</div>
+      {/* Full-height chain (upstream tw-page h-full min-h-0): the column is bounded to
+          the visible height so the workspace cards cover the window and the stock
+          list scrolls inside its panel. */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto hairline-scroll">
+        <div className="flex min-h-0 w-full max-w-none flex-1 flex-col px-7 py-6">{children}</div>
       </div>
     </main>
   );
@@ -441,7 +444,7 @@ export function WatchlistView() {
 
   return (
     <Shell>
-      <div className="mx-auto flex w-full max-w-none flex-col gap-3">
+      <div className="mx-auto flex min-h-0 w-full max-w-none flex-1 flex-col gap-3">
         <header className="flex items-end justify-between gap-3">
           <div>
             <h1 className="text-xl font-semibold">{t("watchlist.title")}</h1>
@@ -486,7 +489,10 @@ export function WatchlistView() {
         )}
 
         {!loading && stocks.length === 0 && (
-          <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 py-10 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-chrome">
+              <Icon name="star" size={28} className="text-faint" />
+            </div>
             <div className="w-full max-w-sm" data-testid="watchlist-empty-add">
               {addForm}
             </div>
@@ -497,7 +503,7 @@ export function WatchlistView() {
 
         {stocks.length > 0 && (
           <div data-testid="watchlist-workspace" className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(22rem,0.8fr)_minmax(0,1.4fr)]">
-            <aside data-testid="watchlist-list-panel" className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl2 border border-line bg-panel lg:order-1">
+            <aside data-testid="watchlist-list-panel" className="rounded-xl2 border border-line bg-panel lg:order-1 lg:flex lg:min-h-0 lg:flex-col lg:overflow-hidden">
               <header className="flex items-center justify-between gap-3 border-b border-line bg-chrome px-4 py-2.5">
                 <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.07em] text-faint">
                   {t("watchlist.listTitle")}
@@ -506,9 +512,9 @@ export function WatchlistView() {
                   {t("watchlist.showing", { count: stocks.length })}
                 </p>
               </header>
-              <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
+              <div className="flex flex-col gap-3 p-3 lg:min-h-0 lg:flex-1">
                 {addForm}
-                <ul role="list" className="min-h-0 flex-1 space-y-2 overflow-y-auto hairline-scroll">
+                <ul role="list" className="space-y-2 hairline-scroll lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
                   {stocks.map((stock) => (
                     <li key={stock.code}>
                       <StockCard
@@ -533,7 +539,7 @@ export function WatchlistView() {
               </div>
             </aside>
 
-            <section data-testid="watchlist-chart-panel" className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl2 border border-line bg-panel lg:order-2">
+            <section data-testid="watchlist-chart-panel" className="rounded-xl2 border border-line bg-panel lg:order-2 lg:flex lg:min-h-0 lg:flex-col lg:overflow-hidden">
               <DetailPanel
                 code={activeSelectedCode}
                 name={activeSelectedCode ? (quotes[activeSelectedCode]?.name ?? null) : null}
