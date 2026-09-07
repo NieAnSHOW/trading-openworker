@@ -64,6 +64,7 @@ is required only where listed (no key listed = free / no auth).
 | Market screen | `screen_market` | A-share | — |
 | Symbol search | `search_symbol` | A-share, US | — |
 | Macro / FRED series | `get_macro_series` | Macro (US/global) | `FRED_API_KEY` |
+| A股官方数据（行情/K线/财报/估值/指数/板块/竞价/涨停/热榜/龙虎榜/基金） | `hithink-finance` skill (同花顺官方 REST) | A-share | `HITHINK_FINANCE_API_KEY` (Settings) |
 | iWenCai NL search (问财) | `iwencai_search` | A-share | `VIBE_TRADING_IWENCAI_KEY` |
 
 Notes:
@@ -91,8 +92,11 @@ same-market sources automatically. Only set a concrete source when the user asks
 
 ### Source priority (for OHLCV by market)
 
-- **A-shares**: tencent / mootdx (never banned) > tushare (`TUSHARE_TOKEN`) >
-  baostock / akshare > eastmoney (throttled).
+- **A-shares (analysis/research)**: `hithink-finance` skill (同花顺官方, key-gated,
+  primary for 行情/财报/估值/板块/特色数据) > tencent / mootdx (never banned) >
+  tushare (`TUSHARE_TOKEN`) > baostock / akshare > eastmoney (throttled).
+  Backtest OHLCV still uses the registered loader chain (`source: "auto"`) —
+  hithink-finance is not a backtest loader source.
 - **US stocks**: stooq / yahoo > tiingo / finnhub / fmp / alphavantage (key-gated) >
   sina / eastmoney (throttled) > yfinance.
 - **HK stocks**: tencent > eastmoney / yahoo > yfinance.
@@ -120,8 +124,10 @@ same-market sources automatically. Only set a concrete source when the user asks
 - **Sina / Yahoo also throttle by IP** — same per-host wrapper, same fallback rule.
 - **Key-gated sources need their env key** (`FINNHUB_API_KEY`,
   `ALPHAVANTAGE_API_KEY`, `TIINGO_API_KEY`, `FMP_API_KEY`, `FRED_API_KEY`,
-  `VIBE_TRADING_IWENCAI_KEY`, `TUSHARE_TOKEN`). If the key is absent the tool/loader
-  is unavailable — route to a free same-market source instead of erroring out.
+  `VIBE_TRADING_IWENCAI_KEY`, `TUSHARE_TOKEN`, `HITHINK_FINANCE_API_KEY`
+  (Settings → General; OpenWorker exports it to agent shells automatically). If the key
+  is absent the tool/loader/skill is unavailable — route to a free same-market source
+  instead of erroring out (and tell the user where to configure the key).
 - A single failing symbol or transient HTTP error is reported inside the envelope;
   it never aborts the surrounding batch.
 
