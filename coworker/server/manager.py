@@ -287,6 +287,14 @@ class SessionManager:
         from ..pdf_support import set_fallback_mode
 
         set_fallback_mode(self.pdf_settings()["pdf_fallback"])
+        # Seed the hithink-finance (同花顺金融数据) API key into the process env so the
+        # built-in hithink-finance skill's REST/CLI/Python paths inherit it in every
+        # agent shell (LocalExecutor spreads os.environ). set_hithink_key keeps both
+        # sides in sync; an externally exported HITHINK_FINANCE_API_KEY wins when the
+        # store is empty.
+        _hithink = (self.secrets.get("hithink-finance") or {}).get("api_key")
+        if _hithink:
+            os.environ["HITHINK_FINANCE_API_KEY"] = _hithink
         # Per-session live-view registry: every socket open on a session id gets the turn's events,
         # whoever drives the turn (foreground user_message, channel delivery, self-wake, resume).
         # Delivery itself is socket-independent — this only governs *live visibility*.
@@ -3451,6 +3459,12 @@ class SessionManager:
             # Real on-disk secrets location, so the UI shows the OS-native path instead of a
             # hardcoded POSIX one (Windows -> %APPDATA%\coworker, macOS/Linux -> ~/.config).
             "secrets_path": str(self.secrets.path),
+            # 同花顺金融数据 (hithink-finance) key configured? Status only — the key
+            # itself is never returned (Settings → General card + skill availability).
+            "hithink_has_key": bool(
+                os.environ.get("HITHINK_FINANCE_API_KEY")
+                or (self.secrets.get("hithink-finance") or {}).get("api_key")
+            ),
             **self.pdf_settings(),
             **self.compaction_settings_payload(),
         }
@@ -3743,6 +3757,20 @@ class SessionManager:
         profile.update({"type": "api_key", "api_key": api_key})
         self.secrets.put("provider:openai", profile)
         self._refresh_provider("openai")  # rebuild the OpenAI client with the new key
+        return {"ok": True, **self.get_settings()}
+
+    def set_hithink_key(self, api_key: str) -> dict[str, Any]:
+        """Persist the 同花顺金融数据 (hithink-finance) API key to the SecretStore (0600)
+        and export it as HITHINK_FINANCE_API_KEY so the built-in hithink-finance skill's
+        REST/CLI/Python paths inherit it in every agent shell. An empty string clears
+        both (Settings offers a way to revoke a bad key)."""
+        api_key = (api_key or "").strip()
+        if api_key:
+            self.secrets.put("hithink-finance", {"api_key": api_key})
+            os.environ["HITHINK_FINANCE_API_KEY"] = api_key
+        else:
+            self.secrets.delete("hithink-finance")
+            os.environ.pop("HITHINK_FINANCE_API_KEY", None)
         return {"ok": True, **self.get_settings()}
 
     def set_default_model(self, model: str) -> dict[str, Any]:

@@ -7,6 +7,8 @@ and the REST round-trip. No network, no model calls.
 
 from __future__ import annotations
 
+import os
+
 from pathlib import Path
 
 from coworker.providers import resolve_api_key
@@ -174,3 +176,42 @@ def test_ollama_models_gated_on_liveness(tmp_path, monkeypatch):
 
     monkeypatch.setattr(SessionManager, "_ollama_alive", lambda self: True)
     assert "ollama:llama3.3" in manager.get_settings()["models"]
+
+
+def test_hithink_key_roundtrip_env_injection_and_clear(tmp_path, monkeypatch):
+    """同花顺金融数据 (hithink-finance) key: stored in the SecretStore, exported as
+    HITHINK_FINANCE_API_KEY so agent shells (LocalExecutor spreads os.environ) inherit
+    it for the builtin skill's REST/CLI/Python paths; clearable; never leaked by the
+    settings endpoints; seeded into the env again on manager restart."""
+    from fastapi.testclient import TestClient
+
+    from coworker.server.app import create_app
+    from coworker.server.manager import SessionManager
+
+    monkeypatch.delenv("HITHINK_FINANCE_API_KEY", raising=False)
+    monkeypatch.setenv("COWORKER_STATE_DIR", str(tmp_path / "state"))
+    client = TestClient(create_app(SessionManager(data_dir=tmp_path / "data")))
+
+    assert client.get("/v1/settings").json()["hithink_has_key"] is False
+
+    set_resp = client.post(
+        "/v1/settings/hithink-key", json={"api_key": " fuyao-key-123 "}
+    ).json()
+    assert set_resp["ok"] is True and set_resp["hithink_has_key"] is True
+    # exported (stripped) into the process env; the key value itself is never returned
+    assert os.environ["HITHINK_FINANCE_API_KEY"] == "fuyao-key-123"
+    assert "fuyao-key-123" not in client.get("/v1/settings").text
+
+    # a fresh manager over the same state dir re-seeds the env from the SecretStore
+    SessionManager(data_dir=tmp_path / "data2")
+    assert os.environ["HITHINK_FINANCE_API_KEY"] == "fuyao-key-123"
+
+    # empty string revokes: env gone, store entry gone
+    clear_resp = client.post("/v1/settings/hithink-key", json={"api_key": ""}).json()
+    assert clear_resp["ok"] is True and clear_resp["hithink_has_key"] is False
+    assert "HITHINK_FINANCE_API_KEY" not in os.environ
+    assert (
+        SessionManager(data_dir=tmp_path / "data3").secrets.get("hithink-finance")
+        is None
+    )
+    monkeypatch.delenv("HITHINK_FINANCE_API_KEY", raising=False)

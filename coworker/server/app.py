@@ -2107,6 +2107,10 @@ def create_app(manager: SessionManager) -> FastAPI:
     def settings_set_model_key(body: dict) -> dict[str, Any]:
         return manager.set_model_key((body or {}).get("api_key", ""))
 
+    @app.post("/v1/settings/hithink-key")
+    def settings_set_hithink_key(body: dict) -> dict[str, Any]:
+        return manager.set_hithink_key((body or {}).get("api_key", ""))
+
     @app.post("/v1/settings/default-model")
     def settings_set_default_model(body: dict) -> dict[str, Any]:
         return manager.set_default_model((body or {}).get("model", ""))
