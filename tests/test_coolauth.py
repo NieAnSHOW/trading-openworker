@@ -62,10 +62,11 @@ def _session(secrets: SecretStore) -> None:
     )
 
 
-def _credentials_response(url: str, json: dict) -> httpx.Response:
+def _credentials_response(url: str, json: dict, models=None) -> httpx.Response:
     """Stand-in for POST /app/ai/member/credentials: seals the fake key to the
     clientPublicKey the client submitted (exactly what the server does)."""
     seal = _seal(json["clientPublicKey"], "sk-member-key")
+    granted = models if models is not None else ["deepseek-chat", "glm-5.2"]
     return httpx.Response(
         200,
         json={
@@ -74,7 +75,7 @@ def _credentials_response(url: str, json: dict) -> httpx.Response:
             "data": {
                 "version": 2,
                 "baseURL": "https://upstream.example.com/v1",
-                "models": ["deepseek-chat", "glm-5.2"],
+                "models": granted,
                 "apiKeySeal": seal,
             },
         },
@@ -166,6 +167,29 @@ def test_fetch_credentials_happy_path(tmp_path, monkeypatch):
     assert calls == ["https://admin.example.com/app/ai/member/credentials"]
 
 
+def test_api_url_split_from_frontend_base(tmp_path, monkeypatch):
+    """Dev shape: authorize page on the web app, member API on the server.
+    The browser handoff must use the frontend base; refresh + credentials
+    must hit the API base."""
+    monkeypatch.setenv("COWORKER_PORT", "8765")
+    cfg = _cfg(cool_admin_api_url="http://127.0.0.1:8001")
+    assert coolauth.begin_login(cfg)["authorize_url"].startswith(
+        "https://admin.example.com/auth?"
+    )
+    calls: list[str] = []
+    monkeypatch.setattr(
+        coolauth.httpx,
+        "post",
+        lambda url, **kw: (calls.append(url), _credentials_response(url, kw["json"]))[
+            1
+        ],
+    )
+    secrets = SecretStore(tmp_path / "secrets.json")
+    _session(secrets)
+    assert coolauth.fetch_credentials(secrets, cfg)["ok"] is True
+    assert calls == ["http://127.0.0.1:8001/app/ai/member/credentials"]
+
+
 def test_fetch_credentials_server_error(tmp_path, monkeypatch):
     secrets = SecretStore(tmp_path / "secrets.json")
     _session(secrets)
@@ -247,13 +271,121 @@ def test_sync_credentials_injects_provider_and_models(tmp_path, monkeypatch):
     manager = SessionManager(workspace=tmp_path)
     _session(manager.secrets)
     out = coolauth.sync_credentials(manager, manager.secrets, _cfg())
-    assert out == {"ok": True, "provider": "cool", "models": 2}
+    assert out == {"ok": True, "provider": "trading-server", "models": 2}
 
     providers = {p["name"]: p for p in manager.get_providers()}
-    assert providers["cool"]["configured"] is True
-    assert providers["cool"]["custom"] is True
+    assert providers["trading-server"]["configured"] is True
+    assert providers["trading-server"]["custom"] is False  # built-in descriptor
     settings = manager.get_settings()
-    assert "cool:deepseek-chat" in settings["models"]
-    assert "cool:glm-5.2" in settings["models"]
+    assert "trading-server:deepseek-chat" in settings["models"]
+    assert "trading-server:glm-5.2" in settings["models"]
     # The api_key landed in the provider profile (value itself stays out of APIs).
-    assert manager.secrets.get("provider:cool")["api_key"] == "sk-member-key"
+    assert manager.secrets.get("provider:trading-server")["api_key"] == "sk-member-key"
+
+
+def test_sync_credentials_prunes_revoked_models(tmp_path, monkeypatch):
+    """The server's model list is authoritative: models it no longer grants
+    must leave the picker, not linger forever (add_model alone never shrinks)."""
+    from coworker.server import SessionManager
+
+    state = {"models": ["deepseek-chat", "glm-5.2"]}  # first sync grants two
+
+    def fake_post(url, **kw):
+        return _credentials_response(url, kw["json"], models=state["models"])
+
+    monkeypatch.setenv("COWORKER_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setattr(coolauth.httpx, "post", fake_post)
+    manager = SessionManager(workspace=tmp_path)
+    _session(manager.secrets)
+    coolauth.sync_credentials(manager, manager.secrets, _cfg())
+
+    state["models"] = ["glm-5.2"]  # membership changed: deepseek revoked
+    out = coolauth.sync_credentials(manager, manager.secrets, _cfg())
+    assert out == {"ok": True, "provider": "trading-server", "models": 1}
+    picker = [
+        m for m in manager.get_settings()["models"] if m.startswith("trading-server:")
+    ]
+    assert picker == ["trading-server:glm-5.2"]
+
+
+def test_trading_server_build_rejects_half_configured_profile():
+    from coworker.providers.registry import get_descriptor
+
+    d = get_descriptor("trading-server")
+    assert d is not None and d.title == "Trading Server"
+    # No endpoint → never fall back to api.openai.com with a member key.
+    with pytest.raises(RuntimeError, match="member sign-in"):
+        d.build({"api_key": "sk-x"}, None)
+    with pytest.raises(RuntimeError, match="member sign-in"):
+        d.build({"base_url": "https://gw"}, None)
+    client = d.build({"api_key": "sk-x", "base_url": "https://gw/v1"}, None)
+    assert client is not None
+
+
+def test_startup_resyncs_when_signed_in_but_unprovisioned(tmp_path, monkeypatch):
+    """The incident guard: sign-in landed but the credential sync failed once
+    (e.g. backend briefly down) — the next sidecar start must re-pull and light
+    up the provider instead of staying dark until a fresh browser login."""
+    import time
+
+    from fastapi.testclient import TestClient
+
+    from coworker.server import SessionManager, create_app
+
+    _cool_config_dir(tmp_path)
+    monkeypatch.setenv("COWORKER_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setattr(
+        coolauth.httpx, "post", lambda url, **kw: _credentials_response(url, kw["json"])
+    )
+    manager = SessionManager(workspace=tmp_path)
+    _session(manager.secrets)  # signed in, provider NOT provisioned yet
+
+    with TestClient(create_app(manager)) as client:
+        client.get("/v1/health")  # let the lifespan's background task run
+        deadline = time.time() + 5
+        configured = False
+        while time.time() < deadline:
+            configured = any(
+                p["name"] == "trading-server" and p["configured"]
+                for p in manager.get_providers()
+            )
+            if configured:
+                break
+            time.sleep(0.05)
+        assert configured, "startup resync did not provision trading-server"
+        assert (
+            manager.secrets.get("provider:trading-server")["api_key"] == "sk-member-key"
+        )
+
+
+def test_cloud_sync_route_repulls_models(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from coworker.server import SessionManager, create_app
+
+    _cool_config_dir(tmp_path)
+    monkeypatch.setenv("COWORKER_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setattr(
+        coolauth.httpx, "post", lambda url, **kw: _credentials_response(url, kw["json"])
+    )
+    manager = SessionManager(workspace=tmp_path)
+    _session(manager.secrets)
+    with TestClient(create_app(manager)) as client:
+        body = client.post("/v1/cloud/sync").json()
+        assert body == {"ok": True, "provider": "trading-server", "models": 2}
+        providers = {p["name"]: p for p in manager.get_providers()}
+        assert providers["trading-server"]["configured"] is True
+
+
+def test_cloud_sync_route_without_config(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from coworker.server import SessionManager, create_app
+
+    monkeypatch.setenv("COWORKER_STATE_DIR", str(tmp_path / "state"))  # no config.toml
+    manager = SessionManager(workspace=tmp_path)
+    with TestClient(create_app(manager)) as client:
+        assert client.post("/v1/cloud/sync").json() == {
+            "ok": False,
+            "error": "not configured",
+        }

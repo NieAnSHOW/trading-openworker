@@ -6,6 +6,7 @@ import {
   connectManaged,
   connectMcpBacked,
   disallowUser,
+  cloudSync,
   getSettings,
   getSubscriptions,
   removeCustomProvider,
@@ -65,6 +66,11 @@ export function ModelsTab() {
   const ps = useProviderSetup({ onSaved: refreshSettings });
   useEffect(() => {
     refreshSettings();
+    // Member model list is server-owned: fire-and-forget re-pull on mount, then
+    // refresh again when it lands (failure keeps the cached list — sync never clears).
+    cloudSync()
+      .catch(() => {})
+      .then(() => refreshSettings());
   }, []);
 
   if (!settings) return <div className="text-[13px] text-muted">{t("manage.loading")}</div>;

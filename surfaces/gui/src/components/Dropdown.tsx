@@ -15,9 +15,19 @@ interface Props {
   align?: "left" | "right";
   // Extra classes appended to the trigger pill (e.g. "chip" for a bordered composer-head chip).
   className?: string;
+  // Fires just before the menu opens (e.g. the model picker refreshes its list).
+  onOpen?: () => void;
 }
 
-export function Dropdown({ prefix, value, options, onChange, align = "left", className }: Props) {
+export function Dropdown({
+  prefix,
+  value,
+  options,
+  onChange,
+  align = "left",
+  className,
+  onOpen,
+}: Props) {
   const [open, setOpen] = useState(false);
   const current = options.find((o) => o.value === value);
   const label = (prefix ? `${prefix}: ` : "") + (current?.label || value);
@@ -25,7 +35,10 @@ export function Dropdown({ prefix, value, options, onChange, align = "left", cla
     <div className="dd">
       <button
         className={"pill" + (className ? " " + className : "")}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          if (!open) onOpen?.();
+          setOpen((v) => !v);
+        }}
         title={label}
       >
         <span className="pill-label">{label}</span>

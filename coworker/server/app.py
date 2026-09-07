@@ -169,6 +169,19 @@ from .manager import SessionManager
 
 
 def create_app(manager: SessionManager) -> FastAPI:
+    async def _sync_cool_credentials(mgr) -> None:
+        """Background re-pull of member credentials; failures keep the sign-in
+        (the next startup or fresh login retries)."""
+        from .. import coolauth
+        from ..config import load_config
+
+        try:
+            await asyncio.to_thread(
+                lambda: coolauth.sync_credentials(mgr, mgr.secrets, load_config())
+            )
+        except Exception:
+            pass
+
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         try:
@@ -181,6 +194,20 @@ def create_app(manager: SessionManager) -> FastAPI:
             import traceback
 
             traceback.print_exc()
+        # Cool-Admin members: if already signed in, re-pull credentials in the
+        # background. Covers sign-ins whose sync failed once (e.g. the backend was
+        # briefly down) — without this the provider stays dark until a fresh login.
+        try:
+            from .. import coolauth
+            from ..config import load_config
+
+            if (
+                coolauth.enabled(load_config())
+                and coolauth.status(manager.secrets)["signed_in"]
+            ):
+                asyncio.create_task(_sync_cool_credentials(manager))
+        except Exception:
+            pass
         yield
         await manager.aclose()  # stop gateway + close MCP connections on shutdown
 
@@ -1627,6 +1654,19 @@ def create_app(manager: SessionManager) -> FastAPI:
         if coolauth.enabled(load_config()):
             return coolauth.logout(manager.secrets)
         return cloud.logout(manager.secrets)
+
+    @app.post("/v1/cloud/sync")
+    def cloud_sync() -> dict[str, Any]:
+        """Re-pull the signed-in member's credentials + model list (idempotent —
+        same path as the post-login injection; the model picker fires this on
+        open so server-side plan changes appear without a fresh login)."""
+        from .. import coolauth
+        from ..config import load_config
+
+        cfg = load_config()
+        if not coolauth.enabled(cfg):
+            return {"ok": False, "error": "not configured"}
+        return coolauth.sync_credentials(manager, manager.secrets, cfg)
 
     @app.get("/auth/callback")
     async def cloud_auth_callback(code: str = "", state: str = "", error: str = ""):

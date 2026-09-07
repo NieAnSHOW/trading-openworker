@@ -118,6 +118,8 @@ interface Props {
   // banner and routes sends to setup (preserving the draft) instead of dropping them.
   modelReady?: boolean;
   onConnectModel?: () => void;
+  // Called when the model dropdown opens — lets the app re-pull member models.
+  onRefreshModels?: () => void;
   onConfigureVoiceInput?: () => void;
   onSend: (text: string, attachments?: Attachment[], skill?: string) => void;
   // Feeds the "/" force-run popup (SKILLS-SPEC §4.1 #3): the popup lists this session's
@@ -837,6 +839,7 @@ export function Composer(props: Props) {
                 value={props.model}
                 options={modelOptions}
                 onChange={props.onModelChange}
+                onOpen={props.onRefreshModels}
                 align="right"
               />
             ) : (

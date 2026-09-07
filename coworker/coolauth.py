@@ -12,9 +12,9 @@ Flow (config.cool_admin_base_url set ⇒ /v1/cloud/* routes switch to this modul
      public key. The server Vault-decrypts the api_key and seals it to our key
      (ECDH + HKDF-SHA256 + AES-256-GCM — mirror of ai/service/userMember.ts
      encryptApiKeyForX25519), so the plaintext key never crosses the wire.
-  4. Credentials land as a custom provider ("cool", OpenAI-compatible) via
-     manager.add_custom_provider + set_provider; each model id becomes
-     `cool:<model>` in the picker.
+ 4. Credentials land in the built-in "trading-server" provider's SecretStore
+     profile (registry.py descriptor) via set_provider; each model id becomes
+     `trading-server:<model>` in the picker.
 
 The pending-state table is in-process only (same contract as cloud.py): a login
 that outlives the sidecar simply has to be restarted.
@@ -34,8 +34,7 @@ from .config import Config
 from .secrets import SecretStore
 
 COOL_AUTH_PROFILE = "cool:auth"
-PROVIDER_NAME = "cool"
-PROVIDER_TITLE = "Cool 会员网关"
+PROVIDER_NAME = "trading-server"
 
 # One-shot anti-drive-by nonce: only the authorize page that was handed `state`
 # can complete the callback (mirrors cloud.py's _pending_logins contract).
@@ -61,7 +60,16 @@ def enabled(config: Config) -> bool:
 
 
 def _base(config: Config) -> str:
+    """Frontend base — the authorize page lives in the web app (config.cool_admin_base_url)."""
     return (config.cool_admin_base_url or "").strip().rstrip("/")
+
+
+def _api_base(config: Config) -> str:
+    """API base for server calls (refresh + credentials). Falls back to the
+    frontend base when cool_admin_api_url is unset (same-origin prod deployments
+    put /app/* behind one nginx); set it when the web app and API are split
+    (e.g. dev: page on :9000, midway on :8001)."""
+    return (config.cool_admin_api_url or "").strip().rstrip("/") or _base(config)
 
 
 # --- browser sign-in ---------------------------------------------------------
@@ -145,7 +153,7 @@ def fresh_access_token(secrets: SecretStore, config: Config) -> Optional[str]:
         return None
     try:
         resp = httpx.post(
-            _base(config) + _REFRESH_PATH,
+            _api_base(config) + _REFRESH_PATH,
             json={"refreshToken": refresh_token},
             timeout=15,
         )
@@ -220,7 +228,7 @@ def fetch_credentials(secrets: SecretStore, config: Config) -> dict[str, Any]:
     private_key = X25519PrivateKey.generate()
     try:
         resp = httpx.post(
-            _base(config) + _CREDENTIALS_PATH,
+            _api_base(config) + _CREDENTIALS_PATH,
             json={"clientPublicKey": _public_key_b64(private_key)},
             headers={"Authorization": f"Bearer {token}"},
             timeout=15,
@@ -253,23 +261,27 @@ def fetch_credentials(secrets: SecretStore, config: Config) -> dict[str, Any]:
 def sync_credentials(
     manager: Any, secrets: SecretStore, config: Config
 ) -> dict[str, Any]:
-    """Landing-step: fetch credentials and inject them as the `cool` custom
-    provider + `cool:<model>` picker entries. Idempotent — re-login overwrites."""
+    """Landing-step: fetch credentials and fill the built-in `trading-server`
+    provider's profile + `trading-server:<model>` picker entries. Idempotent —
+    re-login overwrites (the descriptor itself is static in registry.py)."""
     out = fetch_credentials(secrets, config)
     if not out.get("ok"):
         return out
-    fields = {"api_key": str(out["api_key"]), "base_url": str(out["base_url"])}
-    from .providers.registry import is_custom_provider
-
-    if is_custom_provider(PROVIDER_NAME):
-        # register_custom_provider raises on an existing id — a re-login (or the
-        # GUI's own re-add) only refreshes the stored fields.
-        manager.set_provider(PROVIDER_NAME, fields)
-    else:
-        manager.add_custom_provider(
-            PROVIDER_NAME, PROVIDER_TITLE, "openai", str(out["base_url"])
-        )
-        manager.set_provider(PROVIDER_NAME, {"api_key": str(out["api_key"])})
-    for model in out["models"]:
-        manager.add_model(f"{PROVIDER_NAME}:{model}")
+    manager.set_provider(
+        PROVIDER_NAME,
+        {"api_key": str(out["api_key"]), "base_url": str(out["base_url"])},
+    )
+    server_ids = {f"{PROVIDER_NAME}:{m}" for m in out["models"]}
+    for model in server_ids:
+        manager.add_model(model)
+    # The server's list is authoritative (upstream vip_models semantics): models the
+    # membership no longer grants must leave the picker — add_model alone never
+    # shrinks, so stale entries would linger forever.
+    stale = [
+        m
+        for m in manager.get_settings().get("models", [])
+        if m.startswith(f"{PROVIDER_NAME}:") and m not in server_ids
+    ]
+    for model in stale:
+        manager.remove_model(model)
     return {"ok": True, "provider": PROVIDER_NAME, "models": len(out["models"])}

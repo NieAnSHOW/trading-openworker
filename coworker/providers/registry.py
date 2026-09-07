@@ -12,7 +12,8 @@ Chat Completions path), `anthropic` (native Messages API via
 `AnthropicProvider`), `gemini` (native Google GenAI API via `GeminiProvider`), `bedrock`
 (models in the user's own AWS account — Claude natively, everything else via Converse),
 `vertex` (the user's own GCP project — Gemini and Claude natively, open-weight via the
-MaaS endpoint), and `ollama` (local, OpenAI-compatible `/v1`).
+MaaS endpoint), `ollama` (local, OpenAI-compatible `/v1`), and `trading-server` (the
+member-gated gateway provisioned by Cool-Admin sign-in — `coworker/coolauth.py`).
 """
 
 from __future__ import annotations
@@ -337,6 +338,21 @@ def _responses_compat(
         env_key=env_key,
         blurb=f"Uses {title}'s OpenAI-compatible Responses API — the endpoint is prefilled, just add your key.",
     )
+
+
+def _build_trading_server(profile: dict[str, Any], secrets: Any) -> ProviderClient:
+    """OpenAI-compatible member gateway. Both values come from member sign-in; a
+    half-configured profile (manual key without endpoint) must NOT fall back to the
+    OpenAI default endpoint — a member key sent to api.openai.com would leak it."""
+    p = profile or {}
+    key = (p.get("api_key") or "").strip()
+    base = (p.get("base_url") or "").strip()
+    if not key or not base:
+        raise RuntimeError(
+            "Trading Server is provisioned by member sign-in — sign in first "
+            "(or set both endpoint and API key in Settings ▸ Models)."
+        )
+    return OpenAIProvider(api_key=key, base_url=base)
 
 
 DESCRIPTORS: list[ProviderDescriptor] = [
@@ -690,6 +706,28 @@ DESCRIPTORS: list[ProviderDescriptor] = [
         # Reliable native tool-calling + strong coding quality (verified). Pull with
         # `ollama pull qwen3-coder:30b`.
         recommended_model="qwen3-coder:30b",
+    ),
+    # The member-gated Trading Server gateway: endpoint + key are NOT user-typed —
+    # they are provisioned by the Cool-Admin member sign-in (coworker/coolauth.py),
+    # which writes this provider's SecretStore profile and adds `trading-server:<model>`
+    # entries from the server's model list. Key resolves only from the profile — no env
+    # fallback, mirroring upstream's member-credential handling (JWT/keys never leave
+    # the sidecar process).
+    ProviderDescriptor(
+        name="trading-server",
+        title="Trading Server",
+        needs_key=True,
+        fields=[
+            ProviderField("api_key", "API key", secret=True),
+            ProviderField(
+                "base_url",
+                "Endpoint",
+                required=False,
+                help="Provisioned automatically by member sign-in.",
+            ),
+        ],
+        build=_build_trading_server,
+        blurb="Provisioned by member sign-in — no manual key needed.",
     ),
 ]
 

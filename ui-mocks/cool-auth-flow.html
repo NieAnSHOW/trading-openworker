@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OpenWorker — Cool-Admin 会员登录授权流程（方案 B · 浏览器授权）</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: ['selector', '[data-theme="dark"]'],
+    theme: { extend: {
+      colors: {
+        paper:'var(--paper)', panel:'var(--panel)', ink:'var(--ink)', muted:'var(--muted)', faint:'var(--faint)',
+        line:'var(--line)', lineStrong:'var(--line-strong)', accent:'var(--accent)', accentSoft:'var(--accent-soft)',
+        ok:'var(--ok)', warnInk:'var(--warn-ink)', warnSoft:'var(--warn-soft)', danger:'var(--danger)',
+      },
+      fontFamily: { sans:['-apple-system','BlinkMacSystemFont','Segoe UI','Inter','system-ui','sans-serif'],
+                    mono:['SF Mono','Menlo','monospace'] },
+    }},
+  };
+</script>
+<style>
+  :root{
+    --paper:#f5f5f7; --panel:#ffffff; --ink:#1d1d1f; --muted:#6e6e73; --faint:#aeaeb2;
+    --line:#e8e8ed; --line-strong:#d2d2d7; --accent:#2563eb; --accent-soft:#e9f0fd;
+    --ok:#34a853; --warn-ink:#b45309; --warn-soft:#fef3c7; --danger:#ff3b30;
+  }
+  html[data-theme="dark"]{
+    --paper:#1c1c1e; --panel:#2c2c2e; --ink:#f5f5f7; --muted:#98989d; --faint:#636366;
+    --line:#3a3a3c; --line-strong:#48484a; --accent:#5b8cff; --accent-soft:#1e2a44;
+    --ok:#30d158; --warn-ink:#f5c04e; --warn-soft:#3a2e12; --danger:#ff453a;
+  }
+  body{background:var(--paper); color:var(--ink);}
+  .arrow-down{position:relative; padding-left:1.25rem;}
+  .arrow-down::before{content:""; position:absolute; left:.5rem; top:-2px; bottom:calc(100% - 20px); width:2px; background:var(--line-strong);}
+  .arrow-down::after{content:""; position:absolute; left:.28rem; top:calc(100% - 18px); border:6px solid transparent; border-top-color:var(--line-strong);}
+  .step-num{display:inline-grid; place-items:center; width:26px; height:26px; border-radius:9999px; background:var(--accent); color:#fff; font-size:13px; font-weight:700; flex:none;}
+  .chip{display:inline-flex; align-items:center; gap:.35rem; padding:.15rem .55rem; border-radius:9999px; font-size:11px; font-weight:600;}
+  .chip-route{background:var(--accent-soft); color:var(--accent);}
+  .chip-ok{background:color-mix(in srgb, var(--ok) 14%, transparent); color:var(--ok);}
+  .chip-warn{background:var(--warn-soft); color:var(--warn-ink);}
+  .code{font-family:'SF Mono',Menlo,monospace; font-size:11.5px; background:color-mix(in srgb, var(--ink) 6%, transparent); border:1px solid var(--line); border-radius:6px; padding:2px 6px;}
+  pre.block{font-family:'SF Mono',Menlo,monospace; font-size:12px; line-height:1.6; background:color-mix(in srgb, var(--ink) 5%, transparent); border:1px solid var(--line); border-radius:10px; padding:14px 16px; overflow-x:auto; white-space:pre;}
+  .lane{border:1px solid var(--line); border-radius:12px; background:var(--panel);}
+  .lane-head{font-size:12px; font-weight:700; letter-spacing:.02em; padding:8px 12px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:8px;}
+</style>
+</head>
+<body class="font-sans antialiased">
+<div class="max-w-[1080px] mx-auto px-6 py-10">
+
+  <!-- ══════════════ 标题 ══════════════ -->
+  <header class="mb-8">
+    <div class="text-[12px] font-semibold tracking-wider text-faint uppercase mb-1">ui-mocks · 流程存档</div>
+    <h1 class="text-[26px] font-bold leading-tight">Cool-Admin 会员登录授权流程</h1>
+    <p class="text-[14px] text-muted mt-1.5 max-w-[760px]">
+      方案 B · 浏览器授权闭环：桌面客户端唤起系统浏览器 → 独立授权页登录 → JWT
+      form-POST 回落本机 → sidecar 拉取 Vault 密封凭据并注入内置 <span class="code">trading-server</span> 供应商。
+      密钥明文永不过网络、token 不进浏览器历史。
+    </p>
+    <div class="flex gap-2 mt-3">
+      <span class="chip chip-route">coworker/coolauth.py</span>
+      <span class="chip chip-route">POST /auth/cool/callback</span>
+      <span class="chip chip-route">POST /app/ai/member/credentials</span>
+      <span class="chip chip-ok">midway 服务端零改动</span>
+    </div>
+  </header>
+
+  <!-- ══════════════ 参与方 ══════════════ -->
+  <section class="mb-8">
+    <h2 class="text-[15px] font-bold mb-3">参与方</h2>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="lane">
+        <div class="lane-head">🖥 OpenWorker GUI</div>
+        <div class="p-3 text-[12px] text-muted leading-relaxed">React + Tauri。登录按钮 → <span class="code">cloudLogin()</span>，五处入口共享；模型下拉消费注入结果。</div>
+      </div>
+      <div class="lane">
+        <div class="lane-head">⚙ Sidecar（本机 127.0.0.1:PORT）</div>
+        <div class="p-3 text-[12px] text-muted leading-relaxed">FastAPI + 引擎同进程。持有 state 表、SecretStore、Trading Server 注入与模型同步。</div>
+      </div>
+      <div class="lane">
+        <div class="lane-head">🌐 系统浏览器 · 授权页</div>
+        <div class="p-3 text-[12px] text-muted leading-relaxed">cool-admin-vue 独立模块 <span class="code">/auth</span>（免 admin token 守卫）。密码 / 短信双 tab。</div>
+      </div>
+      <div class="lane">
+        <div class="lane-head">🗄 cool-admin-midway（API）</div>
+        <div class="p-3 text-[12px] text-muted leading-relaxed">app 域 JWT 签发 + Vault Transit 密封会员网关密钥。全程零改动。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════ 时序流程 ══════════════ -->
+  <section class="mb-8">
+    <h2 class="text-[15px] font-bold mb-1">时序流程</h2>
+    <p class="text-[12px] text-faint mb-4">8 步闭环。①–③ 发起与登录，④–⑤ 回落与会话落盘，⑥–⑦ 凭据拉取与注入，⑧ 收尾。</p>
+
+    <div class="space-y-0">
+
+      <!-- Step 1 -->
+      <div class="arrow-down mb-4">
+        <div class="panel lane p-4">
+          <div class="flex items-start gap-3">
+            <span class="step-num mt-0.5">1</span>
+            <div class="flex-1">
+              <div class="text-[13.5px] font-semibold">用户点击「登录」 → sidecar 生成一次性 state</div>
+              <div class="text-[12px] text-muted mt-1">GUI <span class="code">POST /v1/cloud/login</span>（复用 stock cloud 路由，按 <span class="code">cool_admin_base_url</span> 多态分支）。sidecar 生成 16 字节 hex state，存入进程内一次性表 <span class="code">coolauth._pending_logins</span>（TTL 600s，防任意网页灌 token）。</div>
+            </div>
+            <span class="chip chip-route">POST /v1/cloud/login</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="arrow-down mb-4">
+        <div class="panel lane p-4">
+          <div class="flex items-start gap-3">
+            <span class="step-num mt-0.5">2</span>
+            <div class="flex-1">
+              <div class="text-[13.5px] font-semibold">sidecar 唤起系统浏览器打开授权页</div>
+              <pre class="block mt-2">{cool_admin_base_url}/auth?port={COWORKER_PORT}&amp;state={hex16}</pre>
+              <div class="text-[12px] text-muted mt-2">前端地址（dev: <span class="code">http://localhost:9000</span>）。Tauri 与纯浏览器 dev 行为一致（sidecar 自己 <span class="code">webbrowser.open</span>）。</div>
+            </div>
+            <span class="chip chip-route">webbrowser.open</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="arrow-down mb-4">
+        <div class="panel lane p-4">
+          <div class="flex items-start gap-3">
+            <span class="step-num mt-0.5">3</span>
+            <div class="flex-1">
+              <div class="text-[13.5px] font-semibold">授权页登录（app 域，不碰 admin 会话）</div>
+              <div class="text-[12px] text-muted mt-1">手机号+密码 / 短信验证码（图形验证码 → <span class="code">/app/user/login/smsCode</span> 发码）。登录提交走 <span class="code">/app/user/login/password</span> 与 <span class="code">/app/user/login/phone</span>（验证码登录），统一 <span class="code">service.request</span> baseUrl（dev 经 vite proxy）。登录成功 <b>不写 storage、不调 user.setToken</b> —— admin 控制台会话零污染。</div>
+            </div>
+            <span class="chip chip-route">POST /app/user/login/*</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 4 -->
+      <div class="arrow-down mb-4">
+        <div class="panel lane p-4">
+          <div class="flex items-start gap-3">
+            <span class="step-num mt-0.5">4</span>
+            <div class="flex-1">
+              <div class="text-[13.5px] font-semibold">form-POST 回落本机（导航式提交，无 CORS / 不进历史）</div>
+              <pre class="block mt-2">POST http://127.0.0.1:{port}/auth/cool/callback
+  state        —— 必须命中一次性表，否则 400
+  token        —— app 域 JWT（access）
+  refreshToken / expire / refreshExpire
+  account      —— 手机号（展示用）</pre>
+            </div>
+            <span class="chip chip-route">/auth/cool/callback</span>
+            <span class="chip chip-warn">tokenless 白名单</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 5 -->
+      <div class="arrow-down mb-4">
+        <div class="panel lane p-4">
+          <div class="flex items-start gap-3">
+            <span class="step-num mt-0.5">5</span>
+            <div class="flex-1">
+              <div class="text-[13.5px] font-semibold">sidecar 校验 state → 会话落盘 → 「登录成功」落点页</div>
+              <div class="text-[12px] text-muted mt-1">state 一次性消费；JWT 对存入 SecretStore profile <span class="code">cool:auth</span>（0600）。浏览器立即收到中文落点页（不等凭据拉取）。</div>
+            </div>
+            <span class="chip chip-ok">cool:auth</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 6 -->
+      <div class="arrow-down mb-4">
+        <div class="panel lane p-4">
+          <div class="flex items-start gap-3">
+            <span class="step-num mt-0.5">6</span>
+            <div class="flex-1">
+              <div class="text-[13.5px] font-semibold">后台任务拉取密封凭据（每次临时 X25519 密钥对）</div>
+              <pre class="block mt-2">POST {cool_admin_api_url}/app/ai/member/credentials
+  Authorization: Bearer &lt;token&gt;
+  { "clientPublicKey": "&lt;X25519 DER-SPKI base64&gt;" }
+→ { code:1000, data:{ version:2, baseURL, models[], apiKeySeal{…} } }</pre>
+              <div class="text-[12px] text-muted mt-2">私钥仅存 sidecar 内存；API 地址独立于前端地址（dev: <span class="code">127.0.0.1:8001</span>，空则回退同域）。</div>
+            </div>
+            <span class="chip chip-route">credentials</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 7 -->
+      <div class="arrow-down mb-4">
+        <div class="panel lane p-4">
+          <div class="flex items-start gap-3">
+            <span class="step-num mt-0.5">7</span>
+            <div class="flex-1">
+              <div class="text-[13.5px] font-semibold">本地解封 → 注入 Trading Server → 模型列表权威同步</div>
+              <div class="text-[12px] text-muted mt-1">
+                解封：<span class="code">ECDH(serverEph, clientPub) → HKDF-SHA256(salt32, info="vibe-trading/member-credential/v1") → AES-256-GCM</span>（镜像 midway <span class="code">userMember.ts</span> 密封算法）。
+                注入：<span class="code">set_provider("trading-server", {api_key, base_url})</span> + 模型 <b>add + prune</b>（服务端列表为权威，撤销即移出选择器）。
+              </div>
+            </div>
+            <span class="chip chip-ok">trading-server</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 8 -->
+      <div class="panel lane p-4">
+        <div class="flex items-start gap-3">
+          <span class="step-num mt-0.5">8</span>
+          <div class="flex-1">
+            <div class="text-[13.5px] font-semibold">GUI 状态翻转 · 登录完成</div>
+            <div class="text-[12px] text-muted mt-1">登录入口轮询 <span class="code">/v1/cloud/status</span> 翻转 → 广播 <span class="code">CLOUD_CHANGED</span>；Settings ▸ 模型「Trading Server」卡片点亮，对话框下拉可选 <span class="code">trading-server:&lt;model&gt;</span>。</div>
+          </div>
+          <span class="chip chip-ok">✓ 闭环</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════════ 模型同步触发矩阵 ══════════════ -->
+  <section class="mb-8">
+    <h2 class="text-[15px] font-bold mb-3">模型列表同步触发点（服务端列表为权威 · add + prune）</h2>
+    <div class="panel lane overflow-hidden">
+      <table class="w-full text-[12.5px]">
+        <thead>
+          <tr class="text-left text-faint border-b border-line">
+            <th class="px-4 py-2 font-semibold">时机</th>
+            <th class="px-4 py-2 font-semibold">链路</th>
+            <th class="px-4 py-2 font-semibold">语义</th>
+          </tr>
+        </thead>
+        <tbody class="text-muted">
+          <tr class="border-b border-line">
+            <td class="px-4 py-2.5 font-medium text-ink">登录回落</td>
+            <td class="px-4 py-2.5">回调路由后台 task → <span class="code">sync_credentials</span></td>
+            <td class="px-4 py-2.5">首次注入（不阻塞落点页；失败保留登录态）</td>
+          </tr>
+          <tr class="border-b border-line">
+            <td class="px-4 py-2.5 font-medium text-ink">sidecar 启动</td>
+            <td class="px-4 py-2.5">lifespan：已登录即后台补同步</td>
+            <td class="px-4 py-2.5">事故守卫 —— 曾失败一次的注入下次启动自动恢复</td>
+          </tr>
+          <tr class="border-b border-line">
+            <td class="px-4 py-2.5 font-medium text-ink">模型下拉打开</td>
+            <td class="px-4 py-2.5"><span class="code">cloudSync() → loadSettings</span>（fire-and-forget）</td>
+            <td class="px-4 py-2.5">选择器即开即新；失败保留缓存列表</td>
+          </tr>
+          <tr class="border-b border-line">
+            <td class="px-4 py-2.5 font-medium text-ink">Settings ▸ 模型 打开</td>
+            <td class="px-4 py-2.5">ModelsTab mount：缓存秒显 → sync → 二次刷新</td>
+            <td class="px-4 py-2.5">管理视图自己管自己的新鲜度，无跨组件事件</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-medium text-ink">显式接口</td>
+            <td class="px-4 py-2.5"><span class="code">POST /v1/cloud/sync</span></td>
+            <td class="px-4 py-2.5">幂等，任意客户端可调</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══════════════ 配置 + 安全 ══════════════ -->
+  <section class="grid md:grid-cols-2 gap-4">
+    <div class="panel lane p-4">
+      <div class="text-[13.5px] font-bold mb-2">配置（~/.config/coworker/config.toml）</div>
+      <pre class="block"># 前端：授权页（浏览器打开）
+cool_admin_base_url = "http://localhost:9000"
+# 服务端 API：refresh + 凭据（空 = 与前端同域）
+cool_admin_api_url  = "http://127.0.0.1:8001"</pre>
+      <div class="text-[12px] text-muted mt-2">生产同域形态只需 <span class="code">cool_admin_base_url</span>（nginx 将 <span class="code">/app/*</span> 反代至 midway）。配置即开关：两键皆空 ⇒ 回落 stock OpenWorker cloud 登录。</div>
+    </div>
+    <div class="panel lane p-4">
+      <div class="text-[13.5px] font-bold mb-2">安全属性</div>
+      <ul class="text-[12.5px] text-muted space-y-1.5 leading-relaxed">
+        <li>• <b class="text-ink">state 一次性 nonce</b>：非本 sidecar 发起的回调 400，防任意网页灌 token</li>
+        <li>• <b class="text-ink">form-POST 回落</b>：导航式提交无 CORS preflight，token 不进浏览器历史</li>
+        <li>• <b class="text-ink">密钥明文不过网络</b>：Vault 密封 + X25519 信封，仅 sidecar 本地解封</li>
+        <li>• <b class="text-ink">app / admin JWT 隔离</b>：授权页自持 app 域 token，不覆盖 admin 会话</li>
+        <li>• <b class="text-ink">key 只落 0600 SecretStore</b>，不进日志 / 提示词 / API 响应</li>
+        <li>• <b class="text-ink">半配置拒绝</b>：Trading Server 缺端点或 key 直接 raise，绝不回落 api.openai.com</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer class="mt-8 text-[11px] text-faint">
+    trading-openworker · ui-mocks/cool-auth-flow.html · 2026-09 存档（实现：coworker/coolauth.py + server/app.py /auth/cool/callback · 授权页：cool-admin-vue src/modules/auth · 服务端零改动）
+  </footer>
+</div>
+</body>
+</html>

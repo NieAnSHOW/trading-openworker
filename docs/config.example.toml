@@ -22,3 +22,11 @@ auto_allow = ["write_file", "replace_in_file", "apply_patch", "apply_unified_dif
 # Server (openworker-server) bind address.
 host = "127.0.0.1"
 port = 8765
+
+# Cool-Admin member sign-in: when set, the app's sign-in flow (GUI button, TUI,
+# server /v1/cloud/login) opens THIS deployment's browser authorize page instead
+# of the stock OpenWorker cloud broker; issued JWTs + sealed member credentials
+# are injected as the built-in "trading-server" provider (Trading Server).
+# e.g. "http://localhost:9000". Split dev setup: add cool_admin_api_url = "http://127.0.0.1:8001"
+# when the web app and the midway API run on different ports (empty = same origin).
+# cool_admin_base_url = "http://localhost:9000"

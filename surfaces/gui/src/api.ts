@@ -689,6 +689,18 @@ export async function cloudLogin(): Promise<{ ok: boolean }> {
   return res.json();
 }
 
+// Re-pull the signed-in member's gateway credentials + model list (idempotent).
+// {ok:false} when the Cool-Admin flow isn't configured or the user is signed out.
+export async function cloudSync(): Promise<{
+  ok: boolean;
+  provider?: string;
+  models?: number;
+  error?: string;
+}> {
+  const res = await fetch(`${httpBase()}/v1/cloud/sync`, { method: "POST" });
+  return res.json();
+}
+
 /** Poll cloud status until the browser sign-in lands (or the bound runs out).
  *
  * Fast 500ms polls for the first 20s — the moment the user finishes in the

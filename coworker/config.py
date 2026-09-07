@@ -77,8 +77,12 @@ class Config:
     # /v1/cloud/* sign-in routes switch to the browser-authorization flow
     # (coworker/coolauth.py): the authorize page form-POSTs the JWT pair back
     # to /auth/cool/callback and the member's Vault-sealed provider credentials
-    # land as the `cool` custom provider. Empty ⇒ stock OpenWorker cloud.
+    # land as the built-in "trading-server" provider. Empty ⇒ stock OpenWorker cloud.
     cool_admin_base_url: str = ""
+    # Server API base for member calls (refresh + credentials) when it differs
+    # from the web app hosting the authorize page (dev: page :9000, API :8001).
+    # Empty ⇒ same origin as cool_admin_base_url (prod nginx maps /app/* there).
+    cool_admin_api_url: str = ""
 
 
 _FIELDS = {
@@ -99,6 +103,7 @@ _FIELDS = {
     "cloud_audience",
     "cloud_relay_ws_url",
     "cool_admin_base_url",
+    "cool_admin_api_url",
 }
 
 # These fields change what consequential actions can run without a prompt, so the normal

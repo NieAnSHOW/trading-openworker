@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  cloudSync,
   announceInboxUnlock,
   createTempWorkspace,
   finalizeAutomationRun,
@@ -2067,6 +2068,11 @@ export function App() {
               connected={connected}
               modelReady={modelReady}
               onConnectModel={openModelSetup}
+              onRefreshModels={() => {
+                cloudSync()
+                  .catch(() => {})
+                  .then(loadSettings); // member model list may have changed server-side
+              }}
               onOpenMemory={() => openSettings("memory")}
               onConfigureVoiceInput={() => openSettings("voice")}
               onSend={send}

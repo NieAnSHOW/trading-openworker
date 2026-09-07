@@ -30,11 +30,12 @@ import { baseName } from "../paths";
 
 // Session surfaces shown as accordions, in display order. The surfaced personas drive this list
 // (so third-party / Ops personas appear); the hardcoded set is the fallback before personas load.
-const SURFACES: { key: string; label: string; icon: IconName; cls: string }[] = [
-  { key: "cowork", label: "Coworker", icon: "diamond", cls: "ico-cowork" },
-  { key: "chat", label: "Chat", icon: "chat", cls: "ico-chat" },
-  { key: "code", label: "Code", icon: "code", cls: "ico-code" },
-];
+const SURFACES: { key: string; label: string; icon: IconName; cls: string }[] =
+  [
+    { key: "cowork", label: "Coworker", icon: "diamond", cls: "ico-cowork" },
+    { key: "chat", label: "Chat", icon: "chat", cls: "ico-chat" },
+    { key: "code", label: "Code", icon: "code", cls: "ico-code" },
+  ];
 
 const surfaceFromPersona = (p: Persona) => ({
   key: p.id,
@@ -67,7 +68,11 @@ function UnseenBadge({ n, failed }: { n: number; failed?: boolean }) {
   return (
     <span
       className="text-[11px] font-semibold text-ink bg-faint/30 rounded-full px-1.5 leading-[15px] shrink-0"
-      title={failed ? t("sidebar.unseen_failed", { count: n }) : t("sidebar.unseen_new", { count: n })}
+      title={
+        failed
+          ? t("sidebar.unseen_failed", { count: n })
+          : t("sidebar.unseen_new", { count: n })
+      }
     >
       {n > 99 ? "99+" : n}
     </span>
@@ -80,7 +85,10 @@ function LiveDot({ state }: { state?: "working" | "sleeping" | "idle" }) {
   const { t } = useTranslation();
   if (state !== "working" && state !== "sleeping") return null;
   return state === "working" ? (
-    <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse shrink-0" title={t("sidebar.status_working")} />
+    <span
+      className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse shrink-0"
+      title={t("sidebar.status_working")}
+    />
   ) : (
     <span
       className="w-1.5 h-1.5 rounded-full bg-faint/60 shrink-0"
@@ -189,7 +197,10 @@ export function Sidebar(props: Props) {
   const [inboxUnlocked, setInboxUnlocked] = useState(
     () => localStorage.getItem("ocw:inbox-unlocked") === "1",
   );
-  const refreshCloud = () => getCloudStatus().then(setCloud).catch(() => {});
+  const refreshCloud = () =>
+    getCloudStatus()
+      .then(setCloud)
+      .catch(() => {});
   useEffect(() => {
     refreshCloud();
     const onFocus = () => refreshCloud();
@@ -211,7 +222,10 @@ export function Sidebar(props: Props) {
   // (mark-seen must clear the badge the moment the detail opens).
   const [automations, setAutomations] = useState<Automation[]>([]);
   useEffect(() => {
-    const load = () => getAutomations().then(setAutomations).catch(() => {});
+    const load = () =>
+      getAutomations()
+        .then(setAutomations)
+        .catch(() => {});
     load();
     const t = setInterval(load, 15_000);
     window.addEventListener(AUTOMATIONS_CHANGED, load);
@@ -245,7 +259,10 @@ export function Sidebar(props: Props) {
     setConfirmDelId(null);
     setRowMenu({
       id,
-      top: r.bottom + 4 + MENU_H > window.innerHeight ? r.top - MENU_H : r.bottom + 4,
+      top:
+        r.bottom + 4 + MENU_H > window.innerHeight
+          ? r.top - MENU_H
+          : r.bottom + 4,
       left: Math.max(8, r.right - MENU_W),
       anchor,
     });
@@ -258,7 +275,8 @@ export function Sidebar(props: Props) {
     // streaming turn fires constantly) must not close the menu.
     const onScroll = (e: Event) => {
       const t = e.target;
-      if (t === document || (t instanceof Node && t.contains(rowMenu.anchor))) closeRowMenu();
+      if (t === document || (t instanceof Node && t.contains(rowMenu.anchor)))
+        closeRowMenu();
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("scroll", onScroll, true);
@@ -296,7 +314,11 @@ export function Sidebar(props: Props) {
     getSettings()
       .then((s) => {
         setLayout(
-          s.nav_layout === "flat" ? "flat" : s.nav_layout === "grouped" ? "grouped" : defaultLayout,
+          s.nav_layout === "flat"
+            ? "flat"
+            : s.nav_layout === "grouped"
+              ? "grouped"
+              : defaultLayout,
         );
         if (s.sessions_peek) setPeek(s.sessions_peek);
       })
@@ -395,7 +417,10 @@ export function Sidebar(props: Props) {
       totalAttention += a;
     }
     if (s.liveness === "working") liveByPersona.set(s.agent, "working");
-    else if (s.liveness === "sleeping" && liveByPersona.get(s.agent) !== "working")
+    else if (
+      s.liveness === "sleeping" &&
+      liveByPersona.get(s.agent) !== "working"
+    )
       liveByPersona.set(s.agent, "sleeping");
   }
 
@@ -446,7 +471,12 @@ export function Sidebar(props: Props) {
   // same actions as the persona accordion's sessionRow (owner ask 2026-07-09).
   const rowActions = (s: SessionInfo, title: string) => {
     const menuOpen = rowMenu?.id === s.session_id;
-    const item = (testid: string, icon: IconName, label: string, onClick: () => void) => (
+    const item = (
+      testid: string,
+      icon: IconName,
+      label: string,
+      onClick: () => void,
+    ) => (
       <button
         className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[13px] text-left hover:bg-paper"
         data-testid={testid}
@@ -463,7 +493,10 @@ export function Sidebar(props: Props) {
     return (
       <span
         // Stay visible while this row's menu is open — the pointer may be on the menu, off the row.
-        className={(menuOpen ? "flex" : "hidden group-hover:flex") + " items-center shrink-0"}
+        className={
+          (menuOpen ? "flex" : "hidden group-hover:flex") +
+          " items-center shrink-0"
+        }
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -476,7 +509,11 @@ export function Sidebar(props: Props) {
             "w-5 h-5 grid place-items-center rounded hover:bg-chromeHover " +
             (menuOpen ? "text-ink bg-chromeHover" : "text-faint hover:text-ink")
           }
-          onClick={(e) => (menuOpen ? closeRowMenu() : openRowMenu(s.session_id, e.currentTarget))}
+          onClick={(e) =>
+            menuOpen
+              ? closeRowMenu()
+              : openRowMenu(s.session_id, e.currentTarget)
+          }
         >
           {/* Vertical kebab = the horizontal glyph rotated — no extra icon needed. */}
           <Icon name="moreHorizontal" size={14} className="rotate-90" />
@@ -493,11 +530,17 @@ export function Sidebar(props: Props) {
                 setEditingId(s.session_id);
                 setEditValue(title);
               })}
-              {item("row-menu-pin", "pin", s.pinned ? t("sidebar.unpin") : t("sidebar.pin"), () =>
-                props.onTogglePin(s.session_id, !s.pinned),
+              {item(
+                "row-menu-pin",
+                "pin",
+                s.pinned ? t("sidebar.unpin") : t("sidebar.pin"),
+                () => props.onTogglePin(s.session_id, !s.pinned),
               )}
-              {item("row-menu-archive", "archive", s.archived ? t("sidebar.unarchive") : t("sidebar.archive"), () =>
-                props.onArchiveSession(s.session_id, !s.archived),
+              {item(
+                "row-menu-archive",
+                "archive",
+                s.archived ? t("sidebar.unarchive") : t("sidebar.archive"),
+                () => props.onArchiveSession(s.session_id, !s.archived),
               )}
               <div className="h-px bg-line my-1 mx-2" />
               {confirmDelId === s.session_id ? (
@@ -548,12 +591,11 @@ export function Sidebar(props: Props) {
         key={s.session_id}
         className={
           "group flex items-center gap-2 px-2 py-1.5 rounded-lg text-left cursor-pointer " +
-          (active
-            ? "bg-ink/[0.055]"
-            : "hover:bg-panel")
+          (active ? "bg-ink/[0.055]" : "hover:bg-panel")
         }
         onClick={() => {
-          if (!editing) props.onSelectSession(s.session_id, s.workspace, s.agent);
+          if (!editing)
+            props.onSelectSession(s.session_id, s.workspace, s.agent);
         }}
         title={editing ? undefined : title}
       >
@@ -579,7 +621,9 @@ export function Sidebar(props: Props) {
                 (active ? "font-medium text-ink" : "text-ink")
               }
             >
-              {s.pinned && <Icon name="pin" size={11} className="text-faint shrink-0" />}
+              {s.pinned && (
+                <Icon name="pin" size={11} className="text-faint shrink-0" />
+              )}
               <span className="truncate">{title}</span>
             </span>
             <span
@@ -589,7 +633,9 @@ export function Sidebar(props: Props) {
               }
             >
               {opts.showTime && compactAge(s.updated_at) && (
-                <span className="text-[11px] text-faint tabular-nums">{compactAge(s.updated_at)}</span>
+                <span className="text-[11px] text-faint tabular-nums">
+                  {compactAge(s.updated_at)}
+                </span>
               )}
               <OriginIcon s={s} />
               <LiveDot state={s.liveness} />
@@ -620,13 +666,12 @@ export function Sidebar(props: Props) {
         key={s.session_id}
         className={
           "group w-full flex items-center gap-2.5 px-2 py-2 rounded-lg cursor-pointer text-left " +
-          (active
-            ? "bg-ink/[0.055]"
-            : "hover:bg-chromeHover")
+          (active ? "bg-ink/[0.055]" : "hover:bg-chromeHover")
         }
         title={editing ? undefined : title}
         onClick={() => {
-          if (!editing) props.onSelectSession(s.session_id, s.workspace, s.agent);
+          if (!editing)
+            props.onSelectSession(s.session_id, s.workspace, s.agent);
         }}
       >
         {/* No leading glyph on session rows (Rohit's call 2026-07-07: the per-session icon
@@ -650,7 +695,8 @@ export function Sidebar(props: Props) {
           <>
             <span
               className={
-                "min-w-0 flex-1 block truncate text-[13px] " + (active ? "font-medium" : "")
+                "min-w-0 flex-1 block truncate text-[13px] " +
+                (active ? "font-medium" : "")
               }
             >
               {title}
@@ -707,7 +753,9 @@ export function Sidebar(props: Props) {
             >
               <div className="flex-1 min-w-0">
                 <div className="text-[13px] text-ink truncate">{a.title}</div>
-                <div className="text-[11px] text-faint truncate">{a.schedule}</div>
+                <div className="text-[11px] text-faint truncate">
+                  {a.schedule}
+                </div>
               </div>
               <UnseenBadge n={a.unseen_runs || 0} failed={a.unseen_failed} />
             </button>
@@ -724,85 +772,103 @@ export function Sidebar(props: Props) {
       (p) => (p.enabled && p.surfaced) || agentsWithSessions.has(p.id),
     );
     return (
-    <div className="relative flex items-center justify-between px-1.5 mb-1" data-testid="recent-header">
-      <span className="text-[11px] uppercase tracking-[0.07em] text-faint font-semibold">
-        {t("sidebar.recent")}
-      </span>
-      <button
-        className="w-6 h-6 grid place-items-center rounded-md text-faint hover:text-ink hover:bg-chromeHover -mr-1"
-        title={t("sidebar.group_and_filter_short")}
-        aria-label={t("sidebar.group_and_filter")}
-        onClick={() => setGroupMenuOpen((v) => !v)}
+      <div
+        className="relative flex items-center justify-between px-1.5 mb-1"
+        data-testid="recent-header"
       >
-        <Icon name="sliders" size={14} />
-      </button>
-      {groupMenuOpen && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setGroupMenuOpen(false)} />
-          <div
-            className="absolute right-0 top-7 z-50 w-56 rounded-xl border border-line bg-panel shadow-xl p-1.5"
-            role="menu"
-            data-testid="group-filter-menu"
-          >
-            <div className="px-2 pt-1 pb-1 text-[11px] uppercase tracking-[0.06em] text-faint font-semibold">
-              {t("sidebar.group_by")}
-            </div>
-            {([["grouped", t("sidebar.group_persona")], ["flat", t("sidebar.group_chrono")]] as ["flat" | "grouped", string][]).map(
-              ([key, label]) => (
+        <span className="text-[11px] uppercase tracking-[0.07em] text-faint font-semibold">
+          {t("sidebar.recent")}
+        </span>
+        <button
+          className="w-6 h-6 grid place-items-center rounded-md text-faint hover:text-ink hover:bg-chromeHover -mr-1"
+          title={t("sidebar.group_and_filter_short")}
+          aria-label={t("sidebar.group_and_filter")}
+          onClick={() => setGroupMenuOpen((v) => !v)}
+        >
+          <Icon name="sliders" size={14} />
+        </button>
+        {groupMenuOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setGroupMenuOpen(false)}
+            />
+            <div
+              className="absolute right-0 top-7 z-50 w-56 rounded-xl border border-line bg-panel shadow-xl p-1.5"
+              role="menu"
+              data-testid="group-filter-menu"
+            >
+              <div className="px-2 pt-1 pb-1 text-[11px] uppercase tracking-[0.06em] text-faint font-semibold">
+                {t("sidebar.group_by")}
+              </div>
+              {(
+                [
+                  ["grouped", t("sidebar.group_persona")],
+                  ["flat", t("sidebar.group_chrono")],
+                ] as ["flat" | "grouped", string][]
+              ).map(([key, label]) => (
                 <button
                   key={key}
                   className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[13px] text-left hover:bg-paper"
                   onClick={() => setGroupBy(key)}
                 >
                   <span className="flex-1">{label}</span>
-                  {layout === key && <span className="text-accent text-[12px]">✓</span>}
-                </button>
-              ),
-            )}
-            {filterPersonaList.length > 1 && (
-              <>
-                <div className="my-1 border-t border-line" />
-                <div className="px-2 pt-1 pb-1 flex items-center justify-between">
-                  <span className="text-[11px] uppercase tracking-[0.06em] text-faint font-semibold">
-                    {t("sidebar.filter_coworker")}
-                  </span>
-                  {filterPersonas.size > 0 && (
-                    <button className="text-[11px] text-accent" onClick={() => setFilterPersonas(new Set())}>
-                      {t("sidebar.clear")}
-                    </button>
+                  {layout === key && (
+                    <span className="text-accent text-[12px]">✓</span>
                   )}
-                </div>
-                <div className="max-h-52 overflow-y-auto">
-                  {filterPersonaList.map((p) => {
-                    const checked = filterPersonas.has(p.id);
-                    return (
+                </button>
+              ))}
+              {filterPersonaList.length > 1 && (
+                <>
+                  <div className="my-1 border-t border-line" />
+                  <div className="px-2 pt-1 pb-1 flex items-center justify-between">
+                    <span className="text-[11px] uppercase tracking-[0.06em] text-faint font-semibold">
+                      {t("sidebar.filter_coworker")}
+                    </span>
+                    {filterPersonas.size > 0 && (
                       <button
-                        key={p.id}
-                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[13px] text-left hover:bg-paper"
-                        onClick={() => toggleFilterPersona(p.id)}
+                        className="text-[11px] text-accent"
+                        onClick={() => setFilterPersonas(new Set())}
                       >
-                        <span
-                          className={
-                            "w-3.5 h-3.5 rounded border grid place-items-center shrink-0 text-white " +
-                            (checked ? "bg-accent border-accent" : "border-line")
-                          }
-                        >
-                          {checked && <span className="text-[9px] leading-none">✓</span>}
-                        </span>
-                        <span className="flex-1 truncate">{p.name}</span>
+                        {t("sidebar.clear")}
                       </button>
-                    );
-                  })}
-                </div>
-                <div className="px-2 pt-1 pb-0.5 text-[11px] text-faint leading-snug">
-                  {t("sidebar.filter_all_hint")}
-                </div>
-              </>
-            )}
-          </div>
-        </>
-      )}
-    </div>
+                    )}
+                  </div>
+                  <div className="max-h-52 overflow-y-auto">
+                    {filterPersonaList.map((p) => {
+                      const checked = filterPersonas.has(p.id);
+                      return (
+                        <button
+                          key={p.id}
+                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[13px] text-left hover:bg-paper"
+                          onClick={() => toggleFilterPersona(p.id)}
+                        >
+                          <span
+                            className={
+                              "w-3.5 h-3.5 rounded border grid place-items-center shrink-0 text-white " +
+                              (checked
+                                ? "bg-accent border-accent"
+                                : "border-line")
+                            }
+                          >
+                            {checked && (
+                              <span className="text-[9px] leading-none">✓</span>
+                            )}
+                          </span>
+                          <span className="flex-1 truncate">{p.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="px-2 pt-1 pb-0.5 text-[11px] text-faint leading-snug">
+                    {t("sidebar.filter_all_hint")}
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </div>
     );
   };
 
@@ -818,7 +884,8 @@ export function Sidebar(props: Props) {
 
   const filteredByProject = useMemo(() => {
     const grouped = new Map<string, SessionInfo[]>();
-    for (const [proj, list] of byProject) grouped.set(proj, list.filter(matches));
+    for (const [proj, list] of byProject)
+      grouped.set(proj, list.filter(matches));
     return grouped;
   }, [byProject, normalizedQuery]);
 
@@ -855,11 +922,15 @@ export function Sidebar(props: Props) {
   const visibleSurfaces = (
     personas
       ? personas
-          .filter((p) => (p.enabled && p.surfaced) || agentsWithSessions.has(p.id))
+          .filter(
+            (p) => (p.enabled && p.surfaced) || agentsWithSessions.has(p.id),
+          )
           .sort((a, b) => Number(b.default) - Number(a.default)) // default leads
           .map(surfaceFromPersona)
       : SURFACES.filter(
-          (s) => s.key === "cowork" || props.surfaces[s.key as keyof SurfaceVisibility],
+          (s) =>
+            s.key === "cowork" ||
+            props.surfaces[s.key as keyof SurfaceVisibility],
         )
   ).filter((s) => personaVisible(s.key));
 
@@ -867,7 +938,8 @@ export function Sidebar(props: Props) {
   const isExpanded = (key: string) => openKey === key; // its body is open
   // Expand ≠ switch: clicking a header only browses (toggles the accordion). The chat area
   // changes only when a session is selected or "New session" is clicked.
-  const onHeaderClick = (key: string) => setOpenKey((k) => (k === key ? null : key));
+  const onHeaderClick = (key: string) =>
+    setOpenKey((k) => (k === key ? null : key));
 
   // The expanded body for the active surface: a "New session" action, then the project-grouped
   // (or flat) session list, then the archived disclosure.
@@ -907,9 +979,12 @@ export function Sidebar(props: Props) {
                 const isActive = proj === props.workspace;
                 // Open the active project by default; if none is active (browsing from another
                 // persona), open the most-recent folder so the accordion isn't all-collapsed.
-                const activeInOrder = !!props.workspace && projectOrder.includes(props.workspace);
-                const defaultOpen = isActive || (!activeInOrder && proj === projectOrder[0]);
-                const open = !!normalizedQuery || defaultOpen !== projToggled.has(proj);
+                const activeInOrder =
+                  !!props.workspace && projectOrder.includes(props.workspace);
+                const defaultOpen =
+                  isActive || (!activeInOrder && proj === projectOrder[0]);
+                const open =
+                  !!normalizedQuery || defaultOpen !== projToggled.has(proj);
                 const showAll = !!normalizedQuery || projShowAll.has(proj);
                 const shown = showAll ? list : list.slice(0, peek);
                 return (
@@ -925,7 +1000,8 @@ export function Sidebar(props: Props) {
                       <Icon name="folder" size={15} className="shrink-0" />
                       <span
                         className={
-                          "truncate min-w-0 text-[13px] " + (isActive ? "font-semibold" : "font-medium")
+                          "truncate min-w-0 text-[13px] " +
+                          (isActive ? "font-semibold" : "font-medium")
                         }
                       >
                         {baseName(proj)}
@@ -946,9 +1022,13 @@ export function Sidebar(props: Props) {
                           {!showAll && list.length > peek && (
                             <button
                               className="px-2 py-1 text-[12px] text-faint hover:text-muted"
-                              onClick={() => setProjShowAll((s) => toggleSet(s, proj))}
+                              onClick={() =>
+                                setProjShowAll((s) => toggleSet(s, proj))
+                              }
                             >
-                              {t("sidebar.show_more_n", { n: list.length - peek })}
+                              {t("sidebar.show_more_n", {
+                                n: list.length - peek,
+                              })}
                             </button>
                           )}
                         </div>
@@ -966,7 +1046,9 @@ export function Sidebar(props: Props) {
           <div className="space-y-0.5">
             {mine.filter(matches).length === 0 ? (
               <div className="px-2 py-1.5 text-[12px] text-faint leading-snug">
-                {normalizedQuery ? t("sidebar.no_matching") : t("sidebar.no_conversations")}
+                {normalizedQuery
+                  ? t("sidebar.no_matching")
+                  : t("sidebar.no_conversations")}
               </div>
             ) : (
               <>
@@ -974,14 +1056,19 @@ export function Sidebar(props: Props) {
                   ? mine.filter(matches)
                   : mine.filter(matches).slice(0, peek)
                 ).map((s) => sessionRow(s))}
-                {!personaShowAll.has(browseKey) && mine.filter(matches).length > peek && (
-                  <button
-                    className="px-2 py-1 text-[12px] text-faint hover:text-muted"
-                    onClick={() => setPersonaShowAll((s) => toggleSet(s, browseKey))}
-                  >
-                    {t("sidebar.show_more_n", { n: mine.filter(matches).length - peek })}
-                  </button>
-                )}
+                {!personaShowAll.has(browseKey) &&
+                  mine.filter(matches).length > peek && (
+                    <button
+                      className="px-2 py-1 text-[12px] text-faint hover:text-muted"
+                      onClick={() =>
+                        setPersonaShowAll((s) => toggleSet(s, browseKey))
+                      }
+                    >
+                      {t("sidebar.show_more_n", {
+                        n: mine.filter(matches).length - peek,
+                      })}
+                    </button>
+                  )}
               </>
             )}
           </div>
@@ -993,11 +1080,17 @@ export function Sidebar(props: Props) {
               className="w-full flex items-center gap-1.5 px-1.5 py-1 rounded text-[12px] text-faint hover:text-muted"
               onClick={() => setShowArchived((v) => !v)}
             >
-              <Icon name={showArchived ? "chevronDown" : "chevronRight"} size={13} className="shrink-0" />
+              <Icon
+                name={showArchived ? "chevronDown" : "chevronRight"}
+                size={13}
+                className="shrink-0"
+              />
               {t("sidebar.archived_n", { n: archived.length })}
             </button>
             {showArchived && (
-              <div className="space-y-0.5 mt-0.5">{archived.filter(matches).map((s) => sessionRow(s))}</div>
+              <div className="space-y-0.5 mt-0.5">
+                {archived.filter(matches).map((s) => sessionRow(s))}
+              </div>
             )}
           </div>
         )}
@@ -1014,19 +1107,30 @@ export function Sidebar(props: Props) {
           as the collapsed reveal button (see .nav-pin-btn / .nav-reveal-btn in styles.css), so
           hovering the reveal peeks the nav and the pin lands right under the cursor — no travel.
           data-tauri-drag-region drags the window; on desktop the row clears the traffic lights. */}
-      <div className="brand px-3.5 pt-2.5 pb-2 flex items-center gap-2" data-tauri-drag-region>
+      <div
+        className="brand px-3.5 pt-2.5 pb-2 flex items-center gap-2"
+        data-tauri-drag-region
+      >
         {/* Collapse (dock) / pin the sidebar. ⌘B mirrors this. */}
         {props.onCollapse && (
           <button
             className="nav-pin-btn w-7 h-7 grid place-items-center rounded-md text-faint hover:text-ink hover:bg-chromeHover shrink-0"
-            title={props.collapsed ? t("sidebar.dock") + " (⌘B)" : t("sidebar.collapse") + " (⌘B)"}
-            aria-label={props.collapsed ? t("sidebar.dock") : t("sidebar.collapse")}
+            title={
+              props.collapsed
+                ? t("sidebar.dock") + " (⌘B)"
+                : t("sidebar.collapse") + " (⌘B)"
+            }
+            aria-label={
+              props.collapsed ? t("sidebar.dock") : t("sidebar.collapse")
+            }
             onClick={props.onCollapse}
           >
             <Icon name="sidebar" size={16} />
           </button>
         )}
-        <div className="brand-wordmark text-[14px]">OpenWorker<span className="beta-tag">BETA</span></div>
+        <div className="brand-wordmark text-[14px]">
+          TradingWorker<span className="beta-tag">BETA</span>
+        </div>
       </div>
 
       {/* New session: a quiet nav row like its siblings (UX-040 — the filled accent block
@@ -1037,7 +1141,8 @@ export function Sidebar(props: Props) {
           className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-left font-medium text-ink hover:bg-chromeHover"
           onClick={() => props.onNewSession(props.agent)}
         >
-          <Icon name="plus" size={15} className="shrink-0" /> {t("sidebar.new_session")}
+          <Icon name="plus" size={15} className="shrink-0" />{" "}
+          {t("sidebar.new_session")}
         </button>
       </div>
 
@@ -1048,7 +1153,8 @@ export function Sidebar(props: Props) {
           className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-left text-muted hover:bg-chromeHover hover:text-ink"
           onClick={() => setSearchModalOpen(true)}
         >
-          <Icon name="search" size={15} className="shrink-0" /> {t("sidebar.search")}
+          <Icon name="search" size={15} className="shrink-0" />{" "}
+          {t("sidebar.search")}
         </button>
       </div>
 
@@ -1091,75 +1197,85 @@ export function Sidebar(props: Props) {
           <div>
             {recentHeader()}
             {layout === "grouped" ? (
-            <div className="space-y-1.5">
-              {visibleSurfaces.map((s) => {
-                const expanded = isExpanded(s.key);
-                return (
-                  // When expanded, the wrapper carries the recessed fill so the header sits INSIDE
-                  // the block with its sessions (one connected group). Collapsed = a plain row.
-                  <div
-                    key={s.key}
-                    className={expanded ? "rounded-xl bg-chromeHover/70 overflow-hidden" : ""}
-                  >
+              <div className="space-y-1.5">
+                {visibleSurfaces.map((s) => {
+                  const expanded = isExpanded(s.key);
+                  return (
+                    // When expanded, the wrapper carries the recessed fill so the header sits INSIDE
+                    // the block with its sessions (one connected group). Collapsed = a plain row.
                     <div
+                      key={s.key}
                       className={
-                        "flex items-center gap-2.5 px-2 py-2 cursor-pointer select-none " +
-                        (expanded
-                          ? ""
-                          : isCurrent(s.key)
-                            ? "rounded-lg bg-chromeHover"
-                            : "rounded-lg hover:bg-chromeHover")
+                        expanded
+                          ? "rounded-xl bg-chromeHover/70 overflow-hidden"
+                          : ""
                       }
-                      onClick={() => onHeaderClick(s.key)}
                     >
-                      <span
+                      <div
                         className={
-                          "min-w-0 flex-1 truncate text-[13px] " +
-                          (isCurrent(s.key) ? "font-semibold text-ink" : "font-medium text-ink")
+                          "flex items-center gap-2.5 px-2 py-2 cursor-pointer select-none " +
+                          (expanded
+                            ? ""
+                            : isCurrent(s.key)
+                              ? "rounded-lg bg-chromeHover"
+                              : "rounded-lg hover:bg-chromeHover")
                         }
+                        onClick={() => onHeaderClick(s.key)}
                       >
-                        {s.label}
-                      </span>
-                      <LiveDot state={liveByPersona.get(s.key)} />
-                      <AttnBadge n={attnByPersona.get(s.key) || 0} />
-                      {/* Persona configuration moved to Settings ▸ Personas (Rohit's call
+                        <span
+                          className={
+                            "min-w-0 flex-1 truncate text-[13px] " +
+                            (isCurrent(s.key)
+                              ? "font-semibold text-ink"
+                              : "font-medium text-ink")
+                          }
+                        >
+                          {s.label}
+                        </span>
+                        <LiveDot state={liveByPersona.get(s.key)} />
+                        <AttnBadge n={attnByPersona.get(s.key) || 0} />
+                        {/* Persona configuration moved to Settings ▸ Personas (Rohit's call
                           2026-07-07) — the per-group gear read as clutter here. */}
-                      <Icon
-                        name={expanded ? "chevronDown" : "chevronRight"}
-                        size={15}
-                        className="text-faint shrink-0"
-                      />
+                        <Icon
+                          name={expanded ? "chevronDown" : "chevronRight"}
+                          size={15}
+                          className="text-faint shrink-0"
+                        />
+                      </div>
+                      {expanded && surfaceBody()}
                     </div>
-                    {expanded && surfaceBody()}
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
             ) : (
-            <div className="space-y-0.5">
-              {recentSessions.length === 0 ? (
-                <div className="px-2 py-1.5 text-[12px] text-faint leading-snug">
-                  {normalizedQuery ? t("sidebar.no_matching") : t("sidebar.no_conversations")}
-                </div>
-              ) : (
-                <>
-                  {(recentExpanded
-                    ? recentSessions
-                    : recentSessions.slice(0, RECENT_PEEK)
-                  ).map((s) => cardRow(s))}
-                  {recentSessions.length > RECENT_PEEK && (
-                    <button
-                      className="w-full text-left px-2 py-1.5 text-[12px] text-muted hover:text-ink"
-                      onClick={() => setRecentExpanded((v) => !v)}
-                    >
-                      {recentExpanded
-                        ? t("sidebar.show_less")
-                        : t("sidebar.show_n_more", { n: recentSessions.length - RECENT_PEEK })}
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
+              <div className="space-y-0.5">
+                {recentSessions.length === 0 ? (
+                  <div className="px-2 py-1.5 text-[12px] text-faint leading-snug">
+                    {normalizedQuery
+                      ? t("sidebar.no_matching")
+                      : t("sidebar.no_conversations")}
+                  </div>
+                ) : (
+                  <>
+                    {(recentExpanded
+                      ? recentSessions
+                      : recentSessions.slice(0, RECENT_PEEK)
+                    ).map((s) => cardRow(s))}
+                    {recentSessions.length > RECENT_PEEK && (
+                      <button
+                        className="w-full text-left px-2 py-1.5 text-[12px] text-muted hover:text-ink"
+                        onClick={() => setRecentExpanded((v) => !v)}
+                      >
+                        {recentExpanded
+                          ? t("sidebar.show_less")
+                          : t("sidebar.show_n_more", {
+                              n: recentSessions.length - RECENT_PEEK,
+                            })}
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -1172,7 +1288,10 @@ export function Sidebar(props: Props) {
         <div className="relative">
           {appMenuOpen && (
             <>
-              <div className="fixed inset-0 z-30" onClick={() => setAppMenuOpen(false)} />
+              <div
+                className="fixed inset-0 z-30"
+                onClick={() => setAppMenuOpen(false)}
+              />
               <div
                 className="absolute z-40 bottom-full left-0 right-0 mb-1 rounded-xl border border-line bg-panel shadow-2xl py-1"
                 data-testid="account-menu"
@@ -1207,7 +1326,8 @@ export function Sidebar(props: Props) {
                         });
                       }}
                     >
-                      <Icon name="plug" size={15} className="shrink-0" /> {t("sidebar.sign_in")}
+                      <Icon name="plug" size={15} className="shrink-0" />{" "}
+                      {t("sidebar.sign_in")}
                     </button>
                   </>
                 )}
@@ -1218,7 +1338,12 @@ export function Sidebar(props: Props) {
                   props.inboxActive,
                   <AttnBadge n={totalAttention} />,
                 )}
-                {appMenuItem("plug", t("nav.connectors"), props.onOpenIntegrations, props.integrationsActive)}
+                {appMenuItem(
+                  "plug",
+                  t("nav.connectors"),
+                  props.onOpenIntegrations,
+                  props.integrationsActive,
+                )}
                 <div className="h-px bg-line my-1 mx-2" />
                 {appMenuItem(
                   "gear",
@@ -1228,7 +1353,12 @@ export function Sidebar(props: Props) {
                   <span className="text-[11px] text-faint">⌘ ,</span>,
                 )}
                 {/* No Automations here — the sidebar's top nav already carries it. */}
-                {appMenuItem("audit", t("nav.activity"), props.onOpenAudit, props.auditActive)}
+                {appMenuItem(
+                  "audit",
+                  t("nav.activity"),
+                  props.onOpenAudit,
+                  props.auditActive,
+                )}
                 {cloud?.signed_in && (
                   <>
                     <div className="h-px bg-line my-1 mx-2" />
@@ -1254,7 +1384,11 @@ export function Sidebar(props: Props) {
             }}
             aria-haspopup="menu"
             aria-expanded={appMenuOpen}
-            aria-label={cloud?.signed_in ? t("sidebar.account_aria", { email: accountEmail }) : t("sidebar.account_not_signed_in_aria")}
+            aria-label={
+              cloud?.signed_in
+                ? t("sidebar.account_aria", { email: accountEmail })
+                : t("sidebar.account_not_signed_in_aria")
+            }
           >
             <span
               className={
@@ -1267,7 +1401,9 @@ export function Sidebar(props: Props) {
             >
               {cloud?.signed_in ? accountName.slice(0, 1).toUpperCase() : "?"}
             </span>
-            <span className={"truncate " + (cloud?.signed_in ? "" : "text-muted")}>
+            <span
+              className={"truncate " + (cloud?.signed_in ? "" : "text-muted")}
+            >
               {cloud?.signed_in ? accountName : t("sidebar.not_signed_in_row")}
             </span>
             {cloud?.signed_in && (
@@ -1289,9 +1425,15 @@ export function Sidebar(props: Props) {
                 data-testid="inbox-chip"
                 role="button"
                 aria-label={
-                  totalAttention > 0 ? t("sidebar.inbox_chip_pending", { n: totalAttention }) : t("nav.inbox")
+                  totalAttention > 0
+                    ? t("sidebar.inbox_chip_pending", { n: totalAttention })
+                    : t("nav.inbox")
                 }
-                title={totalAttention > 0 ? t("sidebar.inbox_chip_pending", { n: totalAttention }) : t("nav.inbox")}
+                title={
+                  totalAttention > 0
+                    ? t("sidebar.inbox_chip_pending", { n: totalAttention })
+                    : t("nav.inbox")
+                }
                 onClick={(e) => {
                   // The chip goes STRAIGHT to Inbox — the menu is the row's target, not the chip's.
                   e.stopPropagation();
@@ -1306,7 +1448,10 @@ export function Sidebar(props: Props) {
             <Icon
               name="chevronDown"
               size={14}
-              className={"text-faint shrink-0 transition-transform " + (appMenuOpen ? "" : "rotate-180")}
+              className={
+                "text-faint shrink-0 transition-transform " +
+                (appMenuOpen ? "" : "rotate-180")
+              }
             />
           </button>
         </div>
