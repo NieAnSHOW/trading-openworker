@@ -10,3 +10,6 @@ dist/
 # Local secrets (live-smoke BYO keys) — never committed
 .env
 .claude/settings.local.json
+
+# Workspace-local runtime state (sessions, chat/conversation DBs, prefs)
+.coworker/
