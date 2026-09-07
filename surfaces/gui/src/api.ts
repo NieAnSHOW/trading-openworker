@@ -888,6 +888,9 @@ export interface ModelSettings {
   surfaces: SurfaceVisibility;
   scratch_base: string;
   secrets_path: string;  // OS-native on-disk location the server reports (not hardcoded)
+  // 同花顺金融数据 (hithink-finance) key configured? Status only — the key itself is
+  // never returned. Optional so the GUI is robust to an older backend.
+  hithink_has_key?: boolean;
   // Sidebar layout preference (§7): "flat" = the persona accordions / today's list; "grouped" =
   // bounded per-persona cards. Defaults to "flat" (absent → flat) so the GUI is robust to an older
   // backend that hasn't shipped the field yet.
@@ -1723,6 +1726,17 @@ export async function setModelKey(
   apiKey: string,
 ): Promise<{ ok: boolean; error?: string; has_key?: boolean; source?: string }> {
   const res = await fetch(`${httpBase()}/v1/settings/model-key`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ api_key: apiKey }),
+  });
+  return res.json();
+}
+
+export async function setHithinkKey(
+  apiKey: string,
+): Promise<{ ok: boolean; error?: string; hithink_has_key?: boolean }> {
+  const res = await fetch(`${httpBase()}/v1/settings/hithink-key`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ api_key: apiKey }),

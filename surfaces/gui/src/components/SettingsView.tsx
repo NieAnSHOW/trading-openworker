@@ -8,6 +8,7 @@ import {
   setAutoApproveShadow,
   setCompactionSettings,
   setContextBar,
+  setHithinkKey,
   setOnboarded,
   setPdfSettings,
   setScratchBase,
@@ -498,6 +499,7 @@ function AppearanceSection() {
       <AutoApproveCard />
 
       <FilesCard />
+      <HithinkCard />
 
       <TrustedWorkspacesCard />
 
@@ -1070,6 +1072,69 @@ function FilesCard() {
         {t("settings.files_help")}
       </div>
       {scratchMsg && <div className="text-[13px] text-muted mt-2.5">{scratchMsg}</div>}
+    </div>
+  );
+}
+
+// -- 同花顺金融数据 (hithink-finance): the builtin A-share data-source skill's unified
+// key. Status-only round-trip (the key value never comes back); the server stores it in
+// the SecretStore and exports HITHINK_FINANCE_API_KEY to every agent shell.
+function HithinkCard() {
+  const { t } = useTranslation();
+  const [hasKey, setHasKey] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const refresh = () =>
+    getSettings()
+      .then((s) => setHasKey(!!s.hithink_has_key))
+      .catch(() => {});
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const save = async () => {
+    setMsg(null);
+    const res = await setHithinkKey(draft.trim());
+    if (res.ok) {
+      setDraft("");
+      setMsg(t("settings.hithink_saved"));
+      refresh();
+    } else {
+      setMsg(res.error || t("settings.hithink_save_error"));
+    }
+  };
+
+  return (
+    <div className={CARD + " p-4 mb-4"}>
+      <div className={FIELD_LABEL}>{t("settings.hithink_title")}</div>
+      <div className="flex items-center gap-2 mt-2.5">
+        <input
+          className={INPUT}
+          type="password"
+          placeholder={hasKey ? t("settings.hithink_replace") : t("settings.hithink_placeholder")}
+          value={draft}
+          spellCheck={false}
+          autoComplete="off"
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && save()}
+        />
+        <button className={BTN_ACCENT} onClick={save} disabled={!draft.trim()}>
+          {t("settings.hithink_save")}
+        </button>
+      </div>
+      <div className={FIELD_HELP}>
+        {t("settings.hithink_help")}{" "}
+        <a
+          className="text-accent underline"
+          href="https://fuyao.aicubes.cn/admin/"
+          target="_blank"
+          rel="noreferrer"
+        >
+          fuyao.aicubes.cn/admin
+        </a>
+      </div>
+      {msg && <div className="text-[13px] text-muted mt-2.5">{msg}</div>}
     </div>
   );
 }
